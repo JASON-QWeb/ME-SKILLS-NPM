@@ -775,6 +775,7 @@ async function handleWellKnownSkills(
   // Add to skill lock file for update tracking (only for global installs)
   if (successful.length > 0 && installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
+    const targetType = targetAgents[0] ?? 'unknown';
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
         try {
@@ -782,6 +783,11 @@ async function handleWellKnownSkills(
             source: sourceIdentifier,
             sourceType: 'well-known',
             sourceUrl: skill.sourceUrl,
+            resourceType: 'skill',
+            targetType,
+            sourceRef: '',
+            resourcePath: skill.installName,
+            remoteHash: '',
             skillFolderHash: '', // Well-known skills don't have a folder hash
           });
         } catch {
@@ -794,6 +800,7 @@ async function handleWellKnownSkills(
   // Add to local lock file for project-scoped installs
   if (successful.length > 0 && !installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
+    const targetType = targetAgents[0] ?? 'unknown';
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
         try {
@@ -806,6 +813,11 @@ async function handleWellKnownSkills(
               {
                 source: sourceIdentifier,
                 sourceType: 'well-known',
+                resourceType: 'skill',
+                targetType,
+                sourceRef: '',
+                resourcePath: skill.installName,
+                remoteHash: computedHash,
                 computedHash,
               },
               cwd
@@ -1504,6 +1516,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     // Add to skill lock file for update tracking (only for global installs)
     if (successful.length > 0 && installGlobally && normalizedSource) {
       const successfulSkillNames = new Set(successful.map((r) => r.skill));
+      const targetType = targetAgents[0] ?? 'unknown';
       for (const skill of selectedSkills) {
         const skillDisplayName = getSkillDisplayName(skill);
         if (successfulSkillNames.has(skillDisplayName)) {
@@ -1522,6 +1535,11 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
               sourceType: parsed.type,
               sourceUrl: parsed.url,
               skillPath: skillPathValue,
+              resourceType: 'skill',
+              targetType,
+              sourceRef: parsed.ref ?? '',
+              resourcePath: skillPathValue || skill.path,
+              remoteHash: skillFolderHash,
               skillFolderHash,
               pluginName: skill.pluginName,
             });
@@ -1535,6 +1553,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     // Add to local lock file for project-scoped installs
     if (successful.length > 0 && !installGlobally) {
       const successfulSkillNames = new Set(successful.map((r) => r.skill));
+      const targetType = targetAgents[0] ?? 'unknown';
       for (const skill of selectedSkills) {
         const skillDisplayName = getSkillDisplayName(skill);
         if (successfulSkillNames.has(skillDisplayName)) {
@@ -1545,6 +1564,11 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
               {
                 source: lockSource || parsed.url,
                 sourceType: parsed.type,
+                resourceType: 'skill',
+                targetType,
+                sourceRef: parsed.ref ?? '',
+                resourcePath: skill.path,
+                remoteHash: computedHash,
                 computedHash,
               },
               cwd

@@ -13,14 +13,14 @@ import {
 
 describe('local-lock', () => {
   describe('getLocalLockPath', () => {
-    it('returns skills-lock.json in given directory', () => {
+    it('returns skillshub-lock.json in given directory', () => {
       const result = getLocalLockPath('/some/project');
-      expect(result).toBe(join('/some/project', 'skills-lock.json'));
+      expect(result).toBe(join('/some/project', 'skillshub-lock.json'));
     });
 
     it('uses cwd when no directory given', () => {
       const result = getLocalLockPath();
-      expect(result).toBe(join(process.cwd(), 'skills-lock.json'));
+      expect(result).toBe(join(process.cwd(), 'skillshub-lock.json'));
     });
   });
 
@@ -29,7 +29,7 @@ describe('local-lock', () => {
       const dir = await mkdtemp(join(tmpdir(), 'lock-test-'));
       try {
         const lock = await readLocalLock(dir);
-        expect(lock).toEqual({ version: 1, skills: {} });
+        expect(lock).toEqual({ version: 2, skills: {} });
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -39,22 +39,32 @@ describe('local-lock', () => {
       const dir = await mkdtemp(join(tmpdir(), 'lock-test-'));
       try {
         const content = {
-          version: 1,
+          version: 2,
           skills: {
             'my-skill': {
               source: 'vercel-labs/skills',
               sourceType: 'github',
+              resourceType: 'skill',
+              targetType: 'claude-code',
+              sourceRef: 'main',
+              resourcePath: 'skills/my-skill/SKILL.md',
+              remoteHash: 'abc123',
               computedHash: 'abc123',
             },
           },
         };
-        await writeFile(join(dir, 'skills-lock.json'), JSON.stringify(content), 'utf-8');
+        await writeFile(join(dir, 'skillshub-lock.json'), JSON.stringify(content), 'utf-8');
 
         const lock = await readLocalLock(dir);
-        expect(lock.version).toBe(1);
-        expect(lock.skills['my-skill']).toEqual({
+        expect(lock.version).toBe(2);
+        expect(lock.skills['my-skill']).toMatchObject({
           source: 'vercel-labs/skills',
           sourceType: 'github',
+          resourceType: 'skill',
+          targetType: 'claude-code',
+          sourceRef: 'main',
+          resourcePath: 'skills/my-skill/SKILL.md',
+          remoteHash: 'abc123',
           computedHash: 'abc123',
         });
       } finally {
@@ -75,10 +85,10 @@ describe('local-lock', () => {
 >>>>>>> feature-branch
   }
 }`;
-        await writeFile(join(dir, 'skills-lock.json'), conflicted, 'utf-8');
+        await writeFile(join(dir, 'skillshub-lock.json'), conflicted, 'utf-8');
 
         const lock = await readLocalLock(dir);
-        expect(lock).toEqual({ version: 1, skills: {} });
+        expect(lock).toEqual({ version: 2, skills: {} });
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -87,9 +97,9 @@ describe('local-lock', () => {
     it('returns empty lock for invalid structure (missing skills key)', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'lock-test-'));
       try {
-        await writeFile(join(dir, 'skills-lock.json'), '{"version": 1}', 'utf-8');
+        await writeFile(join(dir, 'skillshub-lock.json'), '{"version": 1}', 'utf-8');
         const lock = await readLocalLock(dir);
-        expect(lock).toEqual({ version: 1, skills: {} });
+        expect(lock).toEqual({ version: 2, skills: {} });
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -102,21 +112,36 @@ describe('local-lock', () => {
       try {
         await writeLocalLock(
           {
-            version: 1,
+            version: 2,
             skills: {
               'zebra-skill': {
                 source: 'org/z',
                 sourceType: 'github',
+                resourceType: 'skill',
+                targetType: 'cursor',
+                sourceRef: 'main',
+                resourcePath: 'skills/zebra-skill/SKILL.md',
+                remoteHash: 'zzz',
                 computedHash: 'zzz',
               },
               'alpha-skill': {
                 source: 'org/a',
                 sourceType: 'github',
+                resourceType: 'skill',
+                targetType: 'cursor',
+                sourceRef: 'main',
+                resourcePath: 'skills/alpha-skill/SKILL.md',
+                remoteHash: 'aaa',
                 computedHash: 'aaa',
               },
               'middle-skill': {
                 source: 'org/m',
                 sourceType: 'github',
+                resourceType: 'skill',
+                targetType: 'cursor',
+                sourceRef: 'main',
+                resourcePath: 'skills/middle-skill/SKILL.md',
+                remoteHash: 'mmm',
                 computedHash: 'mmm',
               },
             },
@@ -124,7 +149,7 @@ describe('local-lock', () => {
           dir
         );
 
-        const raw = await readFile(join(dir, 'skills-lock.json'), 'utf-8');
+        const raw = await readFile(join(dir, 'skillshub-lock.json'), 'utf-8');
         expect(raw.endsWith('\n')).toBe(true);
 
         const parsed = JSON.parse(raw);
@@ -142,14 +167,28 @@ describe('local-lock', () => {
       try {
         await addSkillToLocalLock(
           'new-skill',
-          { source: 'org/repo', sourceType: 'github', computedHash: 'hash123' },
+          {
+            source: 'org/repo',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'claude-code',
+            sourceRef: 'main',
+            resourcePath: 'skills/new-skill/SKILL.md',
+            remoteHash: 'hash123',
+            computedHash: 'hash123',
+          },
           dir
         );
 
         const lock = await readLocalLock(dir);
-        expect(lock.skills['new-skill']).toEqual({
+        expect(lock.skills['new-skill']).toMatchObject({
           source: 'org/repo',
           sourceType: 'github',
+          resourceType: 'skill',
+          targetType: 'claude-code',
+          sourceRef: 'main',
+          resourcePath: 'skills/new-skill/SKILL.md',
+          remoteHash: 'hash123',
           computedHash: 'hash123',
         });
       } finally {
@@ -162,12 +201,30 @@ describe('local-lock', () => {
       try {
         await addSkillToLocalLock(
           'my-skill',
-          { source: 'org/repo', sourceType: 'github', computedHash: 'old-hash' },
+          {
+            source: 'org/repo',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'cursor',
+            sourceRef: 'main',
+            resourcePath: 'skills/my-skill/SKILL.md',
+            remoteHash: 'old-hash',
+            computedHash: 'old-hash',
+          },
           dir
         );
         await addSkillToLocalLock(
           'my-skill',
-          { source: 'org/repo', sourceType: 'github', computedHash: 'new-hash' },
+          {
+            source: 'org/repo',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'cursor',
+            sourceRef: 'main',
+            resourcePath: 'skills/my-skill/SKILL.md',
+            remoteHash: 'new-hash',
+            computedHash: 'new-hash',
+          },
           dir
         );
 
@@ -183,12 +240,30 @@ describe('local-lock', () => {
       try {
         await addSkillToLocalLock(
           'skill-a',
-          { source: 'org/a', sourceType: 'github', computedHash: 'aaa' },
+          {
+            source: 'org/a',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'cursor',
+            sourceRef: 'main',
+            resourcePath: 'skills/skill-a/SKILL.md',
+            remoteHash: 'aaa',
+            computedHash: 'aaa',
+          },
           dir
         );
         await addSkillToLocalLock(
           'skill-b',
-          { source: 'org/b', sourceType: 'github', computedHash: 'bbb' },
+          {
+            source: 'org/b',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'cursor',
+            sourceRef: 'main',
+            resourcePath: 'skills/skill-b/SKILL.md',
+            remoteHash: 'bbb',
+            computedHash: 'bbb',
+          },
           dir
         );
 
@@ -208,7 +283,16 @@ describe('local-lock', () => {
       try {
         await addSkillToLocalLock(
           'my-skill',
-          { source: 'org/repo', sourceType: 'github', computedHash: 'hash' },
+          {
+            source: 'org/repo',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'claude-code',
+            sourceRef: 'main',
+            resourcePath: 'skills/my-skill/SKILL.md',
+            remoteHash: 'hash',
+            computedHash: 'hash',
+          },
           dir
         );
 
@@ -359,21 +443,39 @@ describe('local-lock', () => {
         // Simulate branch A adding skill-a
         await addSkillToLocalLock(
           'skill-a',
-          { source: 'org/a', sourceType: 'github', computedHash: 'aaa' },
+          {
+            source: 'org/a',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'cursor',
+            sourceRef: 'main',
+            resourcePath: 'skills/skill-a/SKILL.md',
+            remoteHash: 'aaa',
+            computedHash: 'aaa',
+          },
           dir
         );
-        const branchA = await readFile(join(dir, 'skills-lock.json'), 'utf-8');
+        const branchA = await readFile(join(dir, 'skillshub-lock.json'), 'utf-8');
 
         // Reset to empty
-        await writeFile(join(dir, 'skills-lock.json'), '{"version":1,"skills":{}}', 'utf-8');
+        await writeFile(join(dir, 'skillshub-lock.json'), '{"version":2,"skills":{}}', 'utf-8');
 
         // Simulate branch B adding skill-b
         await addSkillToLocalLock(
           'skill-b',
-          { source: 'org/b', sourceType: 'github', computedHash: 'bbb' },
+          {
+            source: 'org/b',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'cursor',
+            sourceRef: 'main',
+            resourcePath: 'skills/skill-b/SKILL.md',
+            remoteHash: 'bbb',
+            computedHash: 'bbb',
+          },
           dir
         );
-        const branchB = await readFile(join(dir, 'skills-lock.json'), 'utf-8');
+        const branchB = await readFile(join(dir, 'skillshub-lock.json'), 'utf-8');
 
         // Both branches produce valid JSON with no timestamps to conflict on
         const parsedA = JSON.parse(branchA);

@@ -172,7 +172,7 @@ Use React carefully.
 
   it('should restore from lock file with experimental_install', () => {
     const result = runCli(['experimental_install'], testDir);
-    expect(result.stdout).toContain('No project skills found in skills-lock.json');
+    expect(result.stdout).toContain('No project skills found in skillshub-lock.json');
   });
 
   describe('internal skills', () => {

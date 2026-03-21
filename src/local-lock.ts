@@ -1,9 +1,11 @@
 import { readFile, writeFile, readdir, stat } from 'fs/promises';
 import { join, relative } from 'path';
 import { createHash } from 'crypto';
+import type { ResourceType } from './types.ts';
 
-const LOCAL_LOCK_FILE = 'skills-lock.json';
-const CURRENT_VERSION = 1;
+const LOCAL_LOCK_FILE = 'skillshub-lock.json';
+const LEGACY_LOCAL_LOCK_FILE = 'skills-lock.json';
+const CURRENT_VERSION = 2;
 
 /**
  * Represents a single skill entry in the local (project) lock file.
@@ -17,12 +19,30 @@ export interface LocalSkillLockEntry {
   source: string;
   /** The provider/source type (e.g., "github", "node_modules", "local") */
   sourceType: string;
+  /** Resource type tracked in the lock file. */
+  resourceType: ResourceType;
+  /** Target agent / tool name associated with the install. */
+  targetType: string;
+  /** Source ref (branch, tag, commit, etc.) used when the resource was installed. */
+  sourceRef: string;
+  /** Repo-relative path to the resource, or the original source path if unavailable. */
+  resourcePath: string;
+  /** Hash used to detect remote changes for the resource. */
+  remoteHash: string;
   /**
    * SHA-256 hash computed from all files in the skill folder.
    * Unlike the global lock which uses GitHub tree SHA, the local lock
    * computes the hash from actual file contents on disk.
    */
   computedHash: string;
+  /** Optional original source URL for compatibility. */
+  sourceUrl?: string;
+  /** Optional original skill path for compatibility. */
+  skillPath?: string;
+  /** Optional GitHub tree SHA / remote hash for compatibility. */
+  skillFolderHash?: string;
+  /** Optional plugin name for compatibility. */
+  pluginName?: string;
 }
 
 /**
@@ -46,30 +66,74 @@ export function getLocalLockPath(cwd?: string): string {
   return join(cwd || process.cwd(), LOCAL_LOCK_FILE);
 }
 
+function getLegacyLocalLockPath(cwd?: string): string {
+  return join(cwd || process.cwd(), LEGACY_LOCAL_LOCK_FILE);
+}
+
+function normalizeLocalEntry(entry: Partial<LocalSkillLockEntry>): LocalSkillLockEntry {
+  const remoteHash = entry.remoteHash ?? entry.skillFolderHash ?? entry.computedHash ?? '';
+  const resourcePath = entry.resourcePath ?? entry.skillPath ?? '';
+
+  return {
+    source: entry.source ?? '',
+    sourceType: entry.sourceType ?? '',
+    resourceType: entry.resourceType ?? 'skill',
+    targetType: entry.targetType ?? '',
+    sourceRef: entry.sourceRef ?? '',
+    resourcePath,
+    remoteHash,
+    computedHash: entry.computedHash ?? remoteHash,
+    sourceUrl: entry.sourceUrl,
+    skillPath: entry.skillPath,
+    skillFolderHash: entry.skillFolderHash ?? remoteHash,
+    pluginName: entry.pluginName,
+  };
+}
+
+function normalizeLocalLockFile(parsed: Partial<LocalSkillLockFile>): LocalSkillLockFile {
+  const normalizedSkills: Record<string, LocalSkillLockEntry> = {};
+  for (const [name, entry] of Object.entries(parsed.skills ?? {})) {
+    normalizedSkills[name] = normalizeLocalEntry(entry as Partial<LocalSkillLockEntry>);
+  }
+
+  return {
+    version: CURRENT_VERSION,
+    skills: normalizedSkills,
+  };
+}
+
+async function readLocalLockFileAtPath(lockPath: string): Promise<LocalSkillLockFile | null> {
+  try {
+    const content = await readFile(lockPath, 'utf-8');
+    const parsed = JSON.parse(content) as Partial<LocalSkillLockFile>;
+
+    if (typeof parsed.version !== 'number' || !parsed.skills) {
+      return null;
+    }
+
+    return normalizeLocalLockFile(parsed);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Read the local skill lock file.
  * Returns an empty lock file structure if the file doesn't exist
  * or is corrupted (e.g., merge conflict markers).
  */
 export async function readLocalLock(cwd?: string): Promise<LocalSkillLockFile> {
-  const lockPath = getLocalLockPath(cwd);
-
-  try {
-    const content = await readFile(lockPath, 'utf-8');
-    const parsed = JSON.parse(content) as LocalSkillLockFile;
-
-    if (typeof parsed.version !== 'number' || !parsed.skills) {
-      return createEmptyLocalLock();
-    }
-
-    if (parsed.version < CURRENT_VERSION) {
-      return createEmptyLocalLock();
-    }
-
-    return parsed;
-  } catch {
-    return createEmptyLocalLock();
+  const current = await readLocalLockFileAtPath(getLocalLockPath(cwd));
+  if (current) {
+    return current;
   }
+
+  const legacy = await readLocalLockFileAtPath(getLegacyLocalLockPath(cwd));
+  if (legacy) {
+    return legacy;
+  }
+
+  return createEmptyLocalLock();
 }
 
 /**
@@ -85,7 +149,11 @@ export async function writeLocalLock(lock: LocalSkillLockFile, cwd?: string): Pr
     sortedSkills[key] = lock.skills[key]!;
   }
 
-  const sorted: LocalSkillLockFile = { version: lock.version, skills: sortedSkills };
+  const normalized = normalizeLocalLockFile({
+    version: lock.version,
+    skills: sortedSkills,
+  });
+  const sorted: LocalSkillLockFile = { version: normalized.version, skills: normalized.skills };
   const content = JSON.stringify(sorted, null, 2) + '\n';
   await writeFile(lockPath, content, 'utf-8');
 }

@@ -349,6 +349,7 @@ export async function runSync(args: string[], options: SyncOptions = {}): Promis
   const successful = results.filter((r) => r.success);
   const failed = results.filter((r) => !r.success);
   const successfulSkillNames = new Set(successful.map((r) => r.skill));
+  const targetType = targetAgents[0] ?? 'unknown';
 
   for (const skill of toInstall) {
     if (successfulSkillNames.has(skill.name)) {
@@ -359,6 +360,11 @@ export async function runSync(args: string[], options: SyncOptions = {}): Promis
           {
             source: skill.packageName,
             sourceType: 'node_modules',
+            resourceType: 'skill',
+            targetType,
+            sourceRef: '',
+            resourcePath: skill.path,
+            remoteHash: computedHash,
             computedHash,
           },
           cwd

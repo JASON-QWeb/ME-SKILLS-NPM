@@ -91,7 +91,7 @@ function showBanner(): void {
   );
   console.log();
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub experimental_install${RESET} ${DIM}Restore from skills-lock.json${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillshub experimental_install${RESET} ${DIM}Restore from skillshub-lock.json${RESET}`
   );
   console.log(
     `  ${DIM}$${RESET} ${TEXT}npx skillshub init ${DIM}[name]${RESET}          ${DIM}Create a new skill${RESET}`
@@ -125,7 +125,7 @@ ${BOLD}Updates:${RESET}
   update               Update all skills to latest versions
 
 ${BOLD}Project:${RESET}
-  experimental_install Restore skills from skills-lock.json
+  experimental_install Restore skills from skillshub-lock.json
   init [name]          Initialize a skill (creates <name>/SKILL.md or ./SKILL.md)
   experimental_sync    Sync skills from node_modules into agent directories
 
@@ -179,7 +179,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} skillshub find typescript               ${DIM}# search by keyword${RESET}
   ${DIM}$${RESET} skillshub check
   ${DIM}$${RESET} skillshub update
-  ${DIM}$${RESET} skillshub experimental_install            ${DIM}# restore from skills-lock.json${RESET}
+  ${DIM}$${RESET} skillshub experimental_install            ${DIM}# restore from skillshub-lock.json${RESET}
   ${DIM}$${RESET} skillshub init my-skill
   ${DIM}$${RESET} skillshub experimental_sync              ${DIM}# sync from node_modules${RESET}
   ${DIM}$${RESET} skillshub experimental_sync -y           ${DIM}# sync without prompts${RESET}
@@ -288,9 +288,11 @@ Describe when this skill should be used.
 // Check and Update Commands
 // ============================================
 
-const AGENTS_DIR = '.agents';
-const LOCK_FILE = '.skill-lock.json';
-const CURRENT_LOCK_VERSION = 3; // Bumped from 2 to 3 for folder hash support
+const STATE_DIR = '.skillshub';
+const LOCK_FILE = 'skillshub-lock.json';
+const LEGACY_STATE_DIR = '.agents';
+const LEGACY_LOCK_FILE = '.skill-lock.json';
+const CURRENT_LOCK_VERSION = 4;
 
 interface SkillLockEntry {
   source: string;
@@ -311,9 +313,9 @@ interface SkillLockFile {
 function getSkillLockPath(): string {
   const xdgStateHome = process.env.XDG_STATE_HOME;
   if (xdgStateHome) {
-    return join(xdgStateHome, 'skills', LOCK_FILE);
+    return join(xdgStateHome, STATE_DIR, LOCK_FILE);
   }
-  return join(homedir(), AGENTS_DIR, LOCK_FILE);
+  return join(homedir(), STATE_DIR, LOCK_FILE);
 }
 
 function readSkillLock(): SkillLockFile {

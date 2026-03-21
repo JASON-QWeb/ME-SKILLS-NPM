@@ -3,10 +3,13 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
+import type { ResourceType } from './types.ts';
 
-const AGENTS_DIR = '.agents';
-const LOCK_FILE = '.skill-lock.json';
-const CURRENT_VERSION = 3; // Bumped from 2 to 3 for folder hash support (GitHub tree SHA)
+const STATE_DIR = '.skillshub';
+const LOCK_FILE = 'skillshub-lock.json';
+const LEGACY_STATE_DIR = '.agents';
+const LEGACY_LOCK_FILE = '.skill-lock.json';
+const CURRENT_VERSION = 4;
 
 /**
  * Represents a single installed skill entry in the lock file.
@@ -20,6 +23,16 @@ export interface SkillLockEntry {
   sourceUrl: string;
   /** Subpath within the source repo, if applicable */
   skillPath?: string;
+  /** Resource type tracked in the lock file. */
+  resourceType: ResourceType;
+  /** Target agent / tool name associated with the install. */
+  targetType: string;
+  /** Source ref (branch, tag, commit, etc.) used when the resource was installed. */
+  sourceRef: string;
+  /** Repo-relative path to the resource, or the original source path if unavailable. */
+  resourcePath: string;
+  /** Hash used to detect remote changes for the resource. */
+  remoteHash: string;
   /**
    * GitHub tree SHA for the entire skill folder.
    * This hash changes when ANY file in the skill folder changes.
@@ -58,15 +71,73 @@ export interface SkillLockFile {
 
 /**
  * Get the path to the global skill lock file.
- * Use $XDG_STATE_HOME/skills/.skill-lock.json if set.
- * otherwise fall back to ~/.agents/.skill-lock.json
+ * Use $XDG_STATE_HOME/skillshub/skillshub-lock.json if set.
+ * otherwise fall back to ~/.skillshub/skillshub-lock.json
  */
 export function getSkillLockPath(): string {
   const xdgStateHome = process.env.XDG_STATE_HOME;
   if (xdgStateHome) {
-    return join(xdgStateHome, 'skills', LOCK_FILE);
+    return join(xdgStateHome, STATE_DIR, LOCK_FILE);
   }
-  return join(homedir(), AGENTS_DIR, LOCK_FILE);
+  return join(homedir(), STATE_DIR, LOCK_FILE);
+}
+
+function getLegacySkillLockPath(): string {
+  const xdgStateHome = process.env.XDG_STATE_HOME;
+  if (xdgStateHome) {
+    return join(xdgStateHome, 'skills', LEGACY_LOCK_FILE);
+  }
+  return join(homedir(), LEGACY_STATE_DIR, LEGACY_LOCK_FILE);
+}
+
+function normalizeSkillLockEntry(entry: Partial<SkillLockEntry>): SkillLockEntry {
+  const remoteHash = entry.remoteHash ?? entry.skillFolderHash ?? '';
+  const resourcePath = entry.resourcePath ?? entry.skillPath ?? '';
+
+  return {
+    source: entry.source ?? '',
+    sourceType: entry.sourceType ?? '',
+    sourceUrl: entry.sourceUrl ?? '',
+    skillPath: entry.skillPath,
+    resourceType: entry.resourceType ?? 'skill',
+    targetType: entry.targetType ?? '',
+    sourceRef: entry.sourceRef ?? '',
+    resourcePath,
+    remoteHash,
+    skillFolderHash: entry.skillFolderHash ?? remoteHash,
+    installedAt: entry.installedAt ?? '',
+    updatedAt: entry.updatedAt ?? '',
+    pluginName: entry.pluginName,
+  };
+}
+
+function normalizeSkillLockFile(parsed: Partial<SkillLockFile>): SkillLockFile {
+  const normalizedSkills: Record<string, SkillLockEntry> = {};
+  for (const [name, entry] of Object.entries(parsed.skills ?? {})) {
+    normalizedSkills[name] = normalizeSkillLockEntry(entry as Partial<SkillLockEntry>);
+  }
+
+  return {
+    version: CURRENT_VERSION,
+    skills: normalizedSkills,
+    dismissed: parsed.dismissed ?? {},
+    lastSelectedAgents: parsed.lastSelectedAgents,
+  };
+}
+
+async function readSkillLockFileAtPath(lockPath: string): Promise<SkillLockFile | null> {
+  try {
+    const content = await readFile(lockPath, 'utf-8');
+    const parsed = JSON.parse(content) as Partial<SkillLockFile>;
+
+    if (typeof parsed.version !== 'number' || !parsed.skills) {
+      return null;
+    }
+
+    return normalizeSkillLockFile(parsed);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -75,28 +146,17 @@ export function getSkillLockPath(): string {
  * Wipes the lock file if it's an old format (version < CURRENT_VERSION).
  */
 export async function readSkillLock(): Promise<SkillLockFile> {
-  const lockPath = getSkillLockPath();
-
-  try {
-    const content = await readFile(lockPath, 'utf-8');
-    const parsed = JSON.parse(content) as SkillLockFile;
-
-    // Validate version - wipe if old format
-    if (typeof parsed.version !== 'number' || !parsed.skills) {
-      return createEmptyLockFile();
-    }
-
-    // If old version, wipe and start fresh (backwards incompatible change)
-    // v3 adds skillFolderHash - we want fresh installs to populate it
-    if (parsed.version < CURRENT_VERSION) {
-      return createEmptyLockFile();
-    }
-
-    return parsed;
-  } catch (error) {
-    // File doesn't exist or is invalid - return empty
-    return createEmptyLockFile();
+  const current = await readSkillLockFileAtPath(getSkillLockPath());
+  if (current) {
+    return current;
   }
+
+  const legacy = await readSkillLockFileAtPath(getLegacySkillLockPath());
+  if (legacy) {
+    return legacy;
+  }
+
+  return createEmptyLockFile();
 }
 
 /**
@@ -110,7 +170,8 @@ export async function writeSkillLock(lock: SkillLockFile): Promise<void> {
   await mkdir(dirname(lockPath), { recursive: true });
 
   // Write with pretty formatting for human readability
-  const content = JSON.stringify(lock, null, 2);
+  const normalized = normalizeSkillLockFile(lock);
+  const content = JSON.stringify(normalized, null, 2);
   await writeFile(lockPath, content, 'utf-8');
 }
 
@@ -241,7 +302,7 @@ export async function addSkillToLock(
   const existingEntry = lock.skills[skillName];
 
   lock.skills[skillName] = {
-    ...entry,
+    ...normalizeSkillLockEntry(entry),
     installedAt: existingEntry?.installedAt ?? now,
     updatedAt: now,
   };
