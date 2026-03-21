@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { runCli } from './test-utils.ts';
 import { shouldInstallInternalSkills } from './skills.ts';
 import { parseAddOptions } from './add.ts';
+import { readLocalLock } from './local-lock.ts';
 
 describe('add command', () => {
   let testDir: string;
@@ -156,6 +157,31 @@ Use React carefully.
     expect(result.stdout).toContain('Unsupported agents for rule installation');
     expect(result.stdout).toContain('claude-code');
     expect(result.exitCode).toBe(1);
+  });
+
+  it('should persist repo-relative rule paths in the project lock', async () => {
+    const sourceDir = join(testDir, 'source');
+    const projectDir = join(testDir, 'project');
+    const rulesDir = join(sourceDir, 'rules');
+    mkdirSync(rulesDir, { recursive: true });
+    mkdirSync(join(projectDir, '.cline'), { recursive: true });
+    writeFileSync(
+      join(rulesDir, 'react.md'),
+      `# React Rule
+
+Use React carefully.
+`
+    );
+
+    const result = runCli(['add', sourceDir, '--rule', '-y', '--agent', 'cline-me'], projectDir);
+
+    expect(result.exitCode).toBe(0);
+
+    const lock = await readLocalLock(projectDir);
+    expect(lock.skills['rule:react']).toMatchObject({
+      resourceType: 'rule',
+      resourcePath: 'rules/react.md',
+    });
   });
 
   it('should support add command aliases (a, i, install)', () => {

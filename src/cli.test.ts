@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runCliOutput, stripLogo, hasLogo } from './test-utils.ts';
+import { buildUpdateInstallInvocation } from './cli.ts';
 
 describe('skillshub CLI', () => {
   describe('--help', () => {
@@ -95,5 +96,40 @@ describe('skillshub CLI', () => {
       const output = runCliOutput(['update']);
       expect(hasLogo(output)).toBe(false);
     }, 60000);
+  });
+
+  describe('update reconstruction', () => {
+    it('should reconstruct repo-root rule installs from repo-relative rule paths', () => {
+      const invocation = buildUpdateInstallInvocation({
+        name: 'react',
+        scope: 'project',
+        entry: {
+          source: 'owner/repo',
+          sourceType: 'github',
+          sourceUrl: 'https://github.com/owner/repo.git',
+          resourceType: 'rule',
+          targetType: 'cline-me',
+          targetTypes: ['cline-me'],
+          sourceRef: 'main',
+          resourcePath: 'rules/react.md',
+          remoteHash: 'hash',
+          skillFolderHash: 'hash',
+          installedAt: '2026-03-21T00:00:00.000Z',
+          updatedAt: '2026-03-21T00:00:00.000Z',
+        },
+      });
+
+      expect(invocation.sourceUrl).toBe('https://github.com/owner/repo/tree/main');
+      expect(invocation.args).toEqual([
+        'add',
+        'https://github.com/owner/repo/tree/main',
+        '--rule',
+        '--skill',
+        'react',
+        '--agent',
+        'cline-me',
+        '-y',
+      ]);
+    });
   });
 });

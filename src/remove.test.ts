@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, rmSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { runCli, runCliWithInput } from './test-utils.js';
+import { readLocalLock, writeLocalLock } from './local-lock.ts';
 
 describe('remove command', { timeout: 30000 }, () => {
   let testDir: string;
@@ -324,6 +325,93 @@ This is a test skill.
         testDir
       );
       expect(result.stdout).not.toContain('Invalid agents');
+    });
+  });
+
+  describe('rule lock cleanup', () => {
+    it('should remove project rule lock entries when removing rules', async () => {
+      const canonicalRulesDir = join(testDir, '.agents', 'rules');
+      const clineRulesDir = join(testDir, '.clinerules');
+      mkdirSync(canonicalRulesDir, { recursive: true });
+      mkdirSync(clineRulesDir, { recursive: true });
+      writeFileSync(join(canonicalRulesDir, 'react.md'), '# React\n');
+      writeFileSync(join(clineRulesDir, 'react.md'), '# React\n');
+
+      await writeLocalLock(
+        {
+          version: 2,
+          skills: {
+            'rule:react': {
+              source: 'owner/repo',
+              sourceType: 'github',
+              sourceUrl: 'https://github.com/owner/repo.git',
+              resourceType: 'rule',
+              targetType: 'cline-me',
+              targetTypes: ['cline-me'],
+              sourceRef: 'main',
+              resourcePath: 'rules/react.md',
+              remoteHash: 'hash',
+              computedHash: 'hash',
+            },
+          },
+        },
+        testDir
+      );
+
+      const result = runCli(['remove', 'react', '--rule', '-y'], testDir);
+
+      expect(result.stdout).toContain('Successfully removed');
+      const lock = await readLocalLock(testDir);
+      expect(lock.skills['rule:react']).toBeUndefined();
+    });
+
+    it('should remove global rule lock entries when removing rules', () => {
+      const globalHome = join(testDir, 'global-home');
+      const globalStateHome = join(testDir, 'global-state');
+      const globalRulesDir = join(globalHome, '.agents', 'rules');
+      const globalClineRulesDir = join(globalHome, '.clinerules');
+      const globalLockPath = join(globalStateHome, '.skillshub', 'skillshub-lock.json');
+
+      mkdirSync(globalRulesDir, { recursive: true });
+      mkdirSync(globalClineRulesDir, { recursive: true });
+      mkdirSync(join(globalStateHome, '.skillshub'), { recursive: true });
+      writeFileSync(join(globalRulesDir, 'react.md'), '# React\n');
+      writeFileSync(join(globalClineRulesDir, 'react.md'), '# React\n');
+      writeFileSync(
+        globalLockPath,
+        JSON.stringify(
+          {
+            version: 4,
+            skills: {
+              'rule:react': {
+                source: 'owner/repo',
+                sourceType: 'github',
+                sourceUrl: 'https://github.com/owner/repo.git',
+                resourceType: 'rule',
+                targetType: 'cline-me',
+                targetTypes: ['cline-me'],
+                sourceRef: 'main',
+                resourcePath: 'rules/react.md',
+                remoteHash: 'hash',
+                skillFolderHash: 'hash',
+                installedAt: '2026-03-21T00:00:00.000Z',
+                updatedAt: '2026-03-21T00:00:00.000Z',
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+
+      const result = runCli(['remove', 'react', '--rule', '--global', '-y'], testDir, {
+        HOME: globalHome,
+        XDG_STATE_HOME: globalStateHome,
+      });
+
+      expect(result.stdout).toContain('Successfully removed');
+      const lock = JSON.parse(readFileSync(globalLockPath, 'utf-8'));
+      expect(lock.skills['rule:react']).toBeUndefined();
     });
   });
 });

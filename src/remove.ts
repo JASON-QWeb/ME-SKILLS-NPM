@@ -5,6 +5,7 @@ import { join } from 'path';
 import { agents, detectInstalledAgents, getAgentsSupportingResource } from './agents.ts';
 import { track } from './telemetry.ts';
 import { removeSkillFromLock, getSkillFromLock } from './skill-lock.ts';
+import { removeSkillFromLocalLock } from './local-lock.ts';
 import type { AgentType, ResourceType } from './types.ts';
 import {
   getInstallPath,
@@ -160,6 +161,12 @@ async function removeRuleCommand(ruleNames: string[], options: RemoveOptions): P
         resourceType: 'rule',
       });
       await rm(installPath, { force: true });
+    }
+
+    if (isGlobal) {
+      await removeSkillFromLock(ruleName, 'rule');
+    } else {
+      await removeSkillFromLocalLock(ruleName, cwd, 'rule');
     }
 
     successCount++;
