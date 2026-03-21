@@ -6,6 +6,37 @@ The SkillsHub CLI for the open agent skills ecosystem.
 Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [39 more](#available-agents).
 <!-- agent-list:end -->
 
+## Quick Start
+
+```bash
+# Install dependencies
+pnpm install
+
+# Run the CLI locally
+pnpm dev add vercel-labs/agent-skills
+
+# Or use npx after publishing
+npx skillshub add vercel-labs/agent-skills
+```
+
+Common flows:
+
+```bash
+# Install a skill from GitHub
+npx skillshub add vercel-labs/agent-skills
+
+# Install a rule from a repo rules/ directory
+npx skillshub add https://github.com/owner/repo --rule
+
+# Check tracked updates for skills and rules
+npx skillshub check
+
+# Update all tracked skills and rules
+npx skillshub update
+```
+
+If you want to publish your own npm package from this repo, see [docs/publish-to-npm.md](docs/publish-to-npm.md).
+
 ## Install a Skill
 
 ```bash
@@ -19,6 +50,89 @@ npx skillshub add https://github.com/org/repo --rule
 ```
 
 Rules are single Markdown files in a repository's `rules/` directory. The file name without `.md` becomes the rule name.
+
+## Command Guide
+
+### 1. Add skills
+
+```bash
+# Install all detected skills
+npx skillshub add owner/repo
+
+# Install one or more named skills
+npx skillshub add owner/repo --skill frontend-design --skill skill-creator
+
+# Install globally
+npx skillshub add owner/repo -g
+
+# Install to a specific tool
+npx skillshub add owner/repo --agent codex
+```
+
+### 2. Add rules
+
+```bash
+# Discover rules from rules/*.md
+npx skillshub add https://github.com/owner/repo --rule
+
+# Install one named rule
+npx skillshub add https://github.com/owner/repo --rule --skill react
+
+# Install rule(s) to Cline-Me
+npx skillshub add https://github.com/owner/repo --rule --agent cline-me
+```
+
+`--rule` looks only at direct files under `rules/*.md`. For example:
+
+```text
+rules/react.md
+rules/angular.md
+```
+
+### 3. List installed resources
+
+```bash
+# List skills
+npx skillshub list
+
+# List rules
+npx skillshub list --rule
+
+# List globally installed rules
+npx skillshub list --rule -g
+```
+
+### 4. Remove resources
+
+```bash
+# Remove a skill
+npx skillshub remove frontend-design
+
+# Remove all skills
+npx skillshub remove --all
+
+# Remove a rule
+npx skillshub remove --rule react
+
+# Remove a global rule
+npx skillshub remove --rule --global react
+```
+
+### 5. Check and update tracked resources
+
+```bash
+# Show available updates
+npx skillshub check
+
+# Reinstall tracked skills and rules from their original source
+npx skillshub update
+```
+
+Notes:
+
+- `check` and `update` currently work best for GitHub-backed sources.
+- Project installs are tracked in `skillshub-lock.json`.
+- Global installs are tracked in `~/.skillshub/skillshub-lock.json`.
 
 ### Source Formats
 
