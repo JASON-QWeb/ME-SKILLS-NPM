@@ -148,6 +148,22 @@ export function parseSource(input: string): ParsedSource {
     return parseSource(`https://gitlab.com/${gitlabPrefixMatch[1]!}`);
   }
 
+  // GitHub SSH URLs should normalize to GitHub HTTPS sources so update tracking
+  // treats them the same as other GitHub installs.
+  const githubSshMatch = input.match(/^git@github\.com:(.+)$/);
+  if (githubSshMatch) {
+    const repoPath = githubSshMatch[1]!.replace(/\.git$/, '');
+    const segments = repoPath.split('/');
+    if (segments.length >= 2) {
+      const [owner, repo, ...rest] = segments;
+      return {
+        type: 'github',
+        url: `https://github.com/${owner}/${repo}.git`,
+        subpath: rest.length > 0 ? sanitizeSubpath(rest.join('/')) : undefined,
+      };
+    }
+  }
+
   // Local path: absolute, relative, or current directory
   if (isLocalPath(input)) {
     const resolvedPath = resolve(input);

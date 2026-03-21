@@ -194,8 +194,8 @@ describe('parseSource', () => {
   describe('Git URL fallback tests', () => {
     it('Git URL - SSH format', () => {
       const result = parseSource('git@github.com:owner/repo.git');
-      expect(result.type).toBe('git');
-      expect(result.url).toBe('git@github.com:owner/repo.git');
+      expect(result.type).toBe('github');
+      expect(result.url).toBe('https://github.com/owner/repo.git');
     });
 
     it('Git URL - custom host', () => {

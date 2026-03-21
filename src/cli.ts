@@ -12,7 +12,16 @@ import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { track } from './telemetry.ts';
-import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
+import { parseSource, getOwnerRepo } from './source-parser.ts';
+import {
+  fetchSkillFolderHash,
+  fetchRuleFileHash,
+  getGitHubToken,
+  readSkillLock as readGlobalSkillLock,
+  type SkillLockEntry as GlobalSkillLockEntry,
+} from './skill-lock.ts';
+import { readLocalLock, type LocalSkillLockEntry } from './local-lock.ts';
+import type { ResourceType } from './types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -341,23 +350,25 @@ interface SkippedSkill {
   name: string;
   reason: string;
   sourceUrl: string;
+  command: string;
 }
 
 /**
  * Determine why a skill cannot be checked for updates automatically.
  */
-function getSkipReason(entry: SkillLockEntry): string {
+function getSkipReason(entry: SkillLockEntry | GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  const resourceType = 'resourceType' in entry ? entry.resourceType : 'skill';
   if (entry.sourceType === 'local') {
     return 'Local path';
   }
   if (entry.sourceType === 'git') {
     return 'Git URL (hash tracking not supported)';
   }
-  if (!entry.skillFolderHash) {
+  if (!getEntryRemoteHash(entry as GlobalSkillLockEntry | LocalSkillLockEntry)) {
     return 'No version hash available';
   }
-  if (!entry.skillPath) {
-    return 'No skill path recorded';
+  if (!getEntryResourcePath(entry as GlobalSkillLockEntry | LocalSkillLockEntry)) {
+    return resourceType === 'rule' ? 'No rule path recorded' : 'No skill path recorded';
   }
   return 'No version tracking';
 }
@@ -369,88 +380,192 @@ function getSkipReason(entry: SkillLockEntry): string {
 function printSkippedSkills(skipped: SkippedSkill[]): void {
   if (skipped.length === 0) return;
   console.log();
-  console.log(`${DIM}${skipped.length} skill(s) cannot be checked automatically:${RESET}`);
+  console.log(`${DIM}${skipped.length} resource(s) cannot be checked automatically:${RESET}`);
   for (const skill of skipped) {
     console.log(`  ${TEXT}•${RESET} ${skill.name} ${DIM}(${skill.reason})${RESET}`);
-    console.log(`    ${DIM}To update: ${TEXT}npx skillshub add ${skill.sourceUrl} -g -y${RESET}`);
+    console.log(`    ${DIM}To update: ${TEXT}${skill.command}${RESET}`);
   }
 }
 
+export interface TrackedUpdateEntry {
+  name: string;
+  scope: 'global' | 'project';
+  entry: GlobalSkillLockEntry | LocalSkillLockEntry;
+}
+
+function getEntryResourceType(entry: GlobalSkillLockEntry | LocalSkillLockEntry): ResourceType {
+  return entry.resourceType ?? 'skill';
+}
+
+function getEntryResourcePath(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  return (entry.resourcePath || entry.skillPath || '').replace(/\\/g, '/');
+}
+
+function getEntryRemoteHash(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  return (
+    entry.remoteHash || entry.skillFolderHash || (entry as LocalSkillLockEntry).computedHash || ''
+  );
+}
+
+function getEntrySourceRef(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  return entry.sourceRef || '';
+}
+
+function stripGitSuffix(sourceUrl: string): string {
+  return sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
+}
+
+function getSkillBasePath(resourcePath: string): string {
+  const normalized = resourcePath.replace(/\\/g, '/');
+  if (normalized.endsWith('/SKILL.md')) {
+    return normalized.slice(0, -9);
+  }
+  if (normalized.endsWith('SKILL.md')) {
+    return normalized.slice(0, -8);
+  }
+  return normalized.replace(/\/$/, '');
+}
+
+function getRuleBasePath(resourcePath: string): string {
+  const normalized = resourcePath.replace(/\\/g, '/');
+  const ruleIndex = normalized.lastIndexOf('/rules/');
+  if (ruleIndex >= 0) {
+    return normalized.slice(0, ruleIndex);
+  }
+  if (normalized.startsWith('rules/')) {
+    return '';
+  }
+  return normalized.replace(/\/[^/]+\.md$/, '');
+}
+
+function getRuleName(resourcePath: string): string {
+  const normalized = resourcePath.replace(/\\/g, '/');
+  const filename = normalized.split('/').pop() || '';
+  return filename.replace(/\.md$/, '');
+}
+
+function buildGithubTreeUrl(sourceUrl: string, ref: string, resourcePath: string): string {
+  const base = stripGitSuffix(sourceUrl);
+  const path = resourcePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  return path ? `${base}/tree/${ref}/${path}` : `${base}/tree/${ref}`;
+}
+
+export async function collectTrackedUpdateEntries(
+  cwd: string = process.cwd()
+): Promise<TrackedUpdateEntry[]> {
+  const [globalLock, localLock] = await Promise.all([readGlobalSkillLock(), readLocalLock(cwd)]);
+
+  const globalEntries = Object.entries(globalLock.skills).map(([name, entry]) => ({
+    name,
+    scope: 'global' as const,
+    entry,
+  }));
+  const localEntries = Object.entries(localLock.skills).map(([name, entry]) => ({
+    name,
+    scope: 'project' as const,
+    entry,
+  }));
+
+  return [...globalEntries, ...localEntries];
+}
+
+export function buildUpdateInstallInvocation(update: TrackedUpdateEntry): {
+  sourceUrl: string;
+  args: string[];
+} {
+  const entry = update.entry;
+  const ref = getEntrySourceRef(entry) || 'main';
+  const resourcePath = getEntryResourcePath(entry);
+  const resourceType = getEntryResourceType(entry);
+
+  const parsedSource = parseSource(entry.sourceUrl || entry.source);
+  let sourceUrl = stripGitSuffix(parsedSource.url);
+  if (entry.sourceType === 'github') {
+    if (resourceType === 'rule') {
+      const basePath = getRuleBasePath(resourcePath);
+      sourceUrl = buildGithubTreeUrl(sourceUrl, ref, basePath);
+    } else {
+      const basePath = getSkillBasePath(resourcePath);
+      sourceUrl = buildGithubTreeUrl(sourceUrl, ref, basePath);
+    }
+  }
+
+  const args = ['add', sourceUrl];
+  if (resourceType === 'rule') {
+    args.push('--rule', '--skill', getRuleName(resourcePath) || update.name);
+  }
+  if (update.scope === 'global') {
+    args.push('-g');
+  }
+  args.push('-y');
+
+  return { sourceUrl, args };
+}
+
 async function runCheck(args: string[] = []): Promise<void> {
-  console.log(`${TEXT}Checking for skill updates...${RESET}`);
+  console.log(`${TEXT}Checking for tracked resource updates...${RESET}`);
   console.log();
 
-  const lock = readSkillLock();
-  const skillNames = Object.keys(lock.skills);
+  const trackedEntries = await collectTrackedUpdateEntries(process.cwd());
 
-  if (skillNames.length === 0) {
-    console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}npx skillshub add <package>${RESET}`);
+  if (trackedEntries.length === 0) {
+    console.log(`${DIM}No tracked resources in lock files.${RESET}`);
+    console.log(`${DIM}Install resources with${RESET} ${TEXT}npx skillshub add <package>${RESET}`);
     return;
   }
 
   // Get GitHub token from user's environment for higher rate limits
   const token = getGitHubToken();
 
-  // Group skills by source (owner/repo) to batch GitHub API calls
-  const skillsBySource = new Map<string, Array<{ name: string; entry: SkillLockEntry }>>();
   const skipped: SkippedSkill[] = [];
 
-  for (const skillName of skillNames) {
-    const entry = lock.skills[skillName];
-    if (!entry) continue;
+  const updates: Array<{ name: string; source: string; scope: string }> = [];
+  const errors: Array<{ name: string; source: string; error: string }> = [];
 
-    // Only check skills with folder hash and skill path
-    if (!entry.skillFolderHash || !entry.skillPath) {
-      skipped.push({ name: skillName, reason: getSkipReason(entry), sourceUrl: entry.sourceUrl });
+  for (const tracked of trackedEntries) {
+    const { name, entry } = tracked;
+    const resourcePath = getEntryResourcePath(entry);
+    const remoteHash = getEntryRemoteHash(entry);
+    const resourceType = getEntryResourceType(entry);
+    const ownerRepo = getOwnerRepo(parseSource(entry.sourceUrl || entry.source)) || entry.source;
+
+    if (entry.sourceType !== 'github' || !remoteHash || !resourcePath) {
+      skipped.push({
+        name,
+        reason: getSkipReason(entry as SkillLockEntry | GlobalSkillLockEntry | LocalSkillLockEntry),
+        sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
+        command: `npx skillshub ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
+      });
       continue;
     }
 
-    const existing = skillsBySource.get(entry.source) || [];
-    existing.push({ name: skillName, entry });
-    skillsBySource.set(entry.source, existing);
-  }
+    try {
+      const latestHash =
+        resourceType === 'rule'
+          ? await fetchRuleFileHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry))
+          : await fetchSkillFolderHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry));
 
-  const totalSkills = skillNames.length - skipped.length;
-  if (totalSkills === 0) {
-    console.log(`${DIM}No GitHub skills to check.${RESET}`);
-    printSkippedSkills(skipped);
-    return;
-  }
-
-  console.log(`${DIM}Checking ${totalSkills} skill(s) for updates...${RESET}`);
-
-  const updates: Array<{ name: string; source: string }> = [];
-  const errors: Array<{ name: string; source: string; error: string }> = [];
-
-  // Check each source (one API call per repo)
-  for (const [source, skills] of skillsBySource) {
-    for (const { name, entry } of skills) {
-      try {
-        const latestHash = await fetchSkillFolderHash(source, entry.skillPath!, token);
-
-        if (!latestHash) {
-          errors.push({ name, source, error: 'Could not fetch from GitHub' });
-          continue;
-        }
-
-        if (latestHash !== entry.skillFolderHash) {
-          updates.push({ name, source });
-        }
-      } catch (err) {
-        errors.push({
-          name,
-          source,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        });
+      if (!latestHash) {
+        errors.push({ name, source: ownerRepo, error: 'Could not fetch from GitHub' });
+        continue;
       }
+
+      if (latestHash !== remoteHash) {
+        updates.push({ name, source: ownerRepo, scope: tracked.scope });
+      }
+    } catch (err) {
+      errors.push({
+        name,
+        source: ownerRepo,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   }
 
   console.log();
 
   if (updates.length === 0) {
-    console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+    console.log(`${TEXT}✓ All tracked resources are up to date${RESET}`);
   } else {
     console.log(`${TEXT}${updates.length} update(s) available:${RESET}`);
     console.log();
@@ -460,13 +575,13 @@ async function runCheck(args: string[] = []): Promise<void> {
     }
     console.log();
     console.log(
-      `${DIM}Run${RESET} ${TEXT}npx skillshub update${RESET} ${DIM}to update all skills${RESET}`
+      `${DIM}Run${RESET} ${TEXT}npx skillshub update${RESET} ${DIM}to update all tracked resources${RESET}`
     );
   }
 
   if (errors.length > 0) {
     console.log();
-    console.log(`${DIM}Could not check ${errors.length} skill(s) (may need reinstall)${RESET}`);
+    console.log(`${DIM}Could not check ${errors.length} resource(s) (may need reinstall)${RESET}`);
     console.log();
     for (const error of errors) {
       console.log(`  ${DIM}✗${RESET} ${error.name}`);
@@ -479,7 +594,7 @@ async function runCheck(args: string[] = []): Promise<void> {
   // Track telemetry
   track({
     event: 'check',
-    skillCount: String(totalSkills),
+    skillCount: String(trackedEntries.length - skipped.length),
     updatesAvailable: String(updates.length),
   });
 
@@ -487,56 +602,64 @@ async function runCheck(args: string[] = []): Promise<void> {
 }
 
 async function runUpdate(): Promise<void> {
-  console.log(`${TEXT}Checking for skill updates...${RESET}`);
+  console.log(`${TEXT}Checking for tracked resource updates...${RESET}`);
   console.log();
 
-  const lock = readSkillLock();
-  const skillNames = Object.keys(lock.skills);
+  const trackedEntries = await collectTrackedUpdateEntries(process.cwd());
 
-  if (skillNames.length === 0) {
-    console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}npx skillshub add <package>${RESET}`);
+  if (trackedEntries.length === 0) {
+    console.log(`${DIM}No tracked resources in lock files.${RESET}`);
+    console.log(`${DIM}Install resources with${RESET} ${TEXT}npx skillshub add <package>${RESET}`);
     return;
   }
 
   // Get GitHub token from user's environment for higher rate limits
   const token = getGitHubToken();
 
-  // Find skills that need updates by checking GitHub directly
-  const updates: Array<{ name: string; source: string; entry: SkillLockEntry }> = [];
+  const updates: Array<TrackedUpdateEntry> = [];
   const skipped: SkippedSkill[] = [];
 
-  for (const skillName of skillNames) {
-    const entry = lock.skills[skillName];
-    if (!entry) continue;
+  for (const tracked of trackedEntries) {
+    const { name, entry } = tracked;
+    const resourcePath = getEntryResourcePath(entry);
+    const remoteHash = getEntryRemoteHash(entry);
+    const resourceType = getEntryResourceType(entry);
+    const ownerRepo = getOwnerRepo(parseSource(entry.sourceUrl || entry.source)) || entry.source;
 
-    // Only check skills with folder hash and skill path
-    if (!entry.skillFolderHash || !entry.skillPath) {
-      skipped.push({ name: skillName, reason: getSkipReason(entry), sourceUrl: entry.sourceUrl });
+    if (entry.sourceType !== 'github' || !remoteHash || !resourcePath) {
+      skipped.push({
+        name,
+        reason: getSkipReason(entry as SkillLockEntry | GlobalSkillLockEntry | LocalSkillLockEntry),
+        sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
+        command: `npx skillshub ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
+      });
       continue;
     }
 
     try {
-      const latestHash = await fetchSkillFolderHash(entry.source, entry.skillPath, token);
+      const latestHash =
+        resourceType === 'rule'
+          ? await fetchRuleFileHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry))
+          : await fetchSkillFolderHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry));
 
-      if (latestHash && latestHash !== entry.skillFolderHash) {
-        updates.push({ name: skillName, source: entry.source, entry });
+      if (latestHash && latestHash !== remoteHash) {
+        updates.push(tracked);
       }
     } catch {
-      // Skip skills that fail to check
+      // Skip resources that fail to check
     }
   }
 
-  const checkedCount = skillNames.length - skipped.length;
+  const checkedCount = trackedEntries.length - skipped.length;
 
   if (checkedCount === 0) {
-    console.log(`${DIM}No skills to check.${RESET}`);
+    console.log(`${DIM}No tracked resources to check.${RESET}`);
     printSkippedSkills(skipped);
     return;
   }
 
   if (updates.length === 0) {
-    console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+    console.log(`${TEXT}✓ All tracked resources are up to date${RESET}`);
     console.log();
     return;
   }
@@ -550,27 +673,7 @@ async function runUpdate(): Promise<void> {
 
   for (const update of updates) {
     console.log(`${TEXT}Updating ${update.name}...${RESET}`);
-
-    // Build the URL with subpath to target the specific skill directory
-    // e.g., https://github.com/owner/repo/tree/main/skills/my-skill
-    let installUrl = update.entry.sourceUrl;
-    if (update.entry.skillPath) {
-      // Extract the skill folder path (remove /SKILL.md suffix)
-      let skillFolder = update.entry.skillPath;
-      if (skillFolder.endsWith('/SKILL.md')) {
-        skillFolder = skillFolder.slice(0, -9);
-      } else if (skillFolder.endsWith('SKILL.md')) {
-        skillFolder = skillFolder.slice(0, -8);
-      }
-      if (skillFolder.endsWith('/')) {
-        skillFolder = skillFolder.slice(0, -1);
-      }
-
-      // Convert git URL to tree URL with path
-      // https://github.com/owner/repo.git -> https://github.com/owner/repo/tree/main/path
-      installUrl = update.entry.sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
-      installUrl = `${installUrl}/tree/main/${skillFolder}`;
-    }
+    const { args: installArgs } = buildUpdateInstallInvocation(update);
 
     // Reinstall using the current CLI entrypoint directly (avoid nested npm exec/npx)
     const cliEntry = join(__dirname, '..', 'bin', 'cli.mjs');
@@ -581,7 +684,7 @@ async function runUpdate(): Promise<void> {
       );
       continue;
     }
-    const result = spawnSync(process.execPath, [cliEntry, 'add', installUrl, '-g', '-y'], {
+    const result = spawnSync(process.execPath, [cliEntry, ...installArgs], {
       stdio: ['inherit', 'pipe', 'pipe'],
       encoding: 'utf-8',
       shell: process.platform === 'win32',
@@ -701,4 +804,6 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  void main();
+}

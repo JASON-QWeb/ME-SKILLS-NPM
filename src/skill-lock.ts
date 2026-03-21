@@ -229,7 +229,8 @@ export function getGitHubToken(): string | null {
 export async function fetchSkillFolderHash(
   ownerRepo: string,
   skillPath: string,
-  token?: string | null
+  token?: string | null,
+  ref?: string
 ): Promise<string | null> {
   // Normalize to forward slashes first (for GitHub API compatibility)
   let folderPath = skillPath.replace(/\\/g, '/');
@@ -246,11 +247,12 @@ export async function fetchSkillFolderHash(
     folderPath = folderPath.slice(0, -1);
   }
 
-  const branches = ['main', 'master'];
+  const branches = ref ? [ref, 'main', 'master'] : ['main', 'master'];
+  const uniqueBranches = [...new Set(branches)];
 
-  for (const branch of branches) {
+  for (const branch of uniqueBranches) {
     try {
-      const url = `https://api.github.com/repos/${ownerRepo}/git/trees/${branch}?recursive=1`;
+      const url = `https://api.github.com/repos/${ownerRepo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
       const headers: Record<string, string> = {
         Accept: 'application/vnd.github.v3+json',
         'User-Agent': 'skills-cli',
@@ -281,6 +283,55 @@ export async function fetchSkillFolderHash(
       if (folderEntry) {
         return folderEntry.sha;
       }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fetch a file's content hash from GitHub using the contents API.
+ * This is used for rule files, which are tracked at file granularity.
+ */
+export async function fetchRuleFileHash(
+  ownerRepo: string,
+  filePath: string,
+  token?: string | null,
+  ref?: string
+): Promise<string | null> {
+  const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const refs = ref ? [ref, 'main', 'master'] : ['main', 'master'];
+  const uniqueRefs = [...new Set(refs)];
+
+  for (const branch of uniqueRefs) {
+    try {
+      const url = `https://api.github.com/repos/${ownerRepo}/contents/${encodeURI(normalizedPath)}?ref=${encodeURIComponent(branch)}`;
+      const headers: Record<string, string> = {
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'skills-cli',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, { headers });
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as {
+        content?: string;
+        encoding?: string;
+      };
+
+      if (!data.content) continue;
+
+      const content =
+        data.encoding === 'base64'
+          ? Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf-8')
+          : data.content;
+
+      return computeContentHash(content);
     } catch {
       continue;
     }

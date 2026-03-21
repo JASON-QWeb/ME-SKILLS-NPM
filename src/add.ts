@@ -2,7 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
-import { sep } from 'path';
+import { sep, relative } from 'path';
 import { parseSource, getOwnerRepo, parseOwnerRepo, isRepoPrivate } from './source-parser.ts';
 import { searchMultiselect } from './prompts/search-multiselect.ts';
 import { discoverRules } from './rules.ts';
@@ -49,6 +49,7 @@ import {
 import { wellKnownProvider, type WellKnownSkill } from './providers/index.ts';
 import {
   addSkillToLock,
+  computeContentHash,
   fetchSkillFolderHash,
   getGitHubToken,
   isPromptDismissed,
@@ -813,6 +814,7 @@ async function handleWellKnownSkills(
               {
                 source: sourceIdentifier,
                 sourceType: 'well-known',
+                sourceUrl: skill.sourceUrl,
                 resourceType: 'skill',
                 targetType,
                 sourceRef: '',
@@ -1526,7 +1528,12 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
             const skillPathValue = skillFiles[skill.name];
             if (parsed.type === 'github' && skillPathValue) {
               const token = getGitHubToken();
-              const hash = await fetchSkillFolderHash(normalizedSource, skillPathValue, token);
+              const hash = await fetchSkillFolderHash(
+                normalizedSource,
+                skillPathValue,
+                token,
+                parsed.ref
+              );
               if (hash) skillFolderHash = hash;
             }
 
@@ -1564,6 +1571,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
               {
                 source: lockSource || parsed.url,
                 sourceType: parsed.type,
+                sourceUrl: parsed.url,
                 resourceType: 'skill',
                 targetType,
                 sourceRef: parsed.ref ?? '',
@@ -2006,6 +2014,49 @@ async function handleRuleInstallation(
 
   const successful = results.filter((result) => result.success);
   const failed = results.filter((result) => !result.success);
+
+  if (successful.length > 0) {
+    const successfulRuleNames = new Set(successful.map((result) => result.rule));
+    const targetType = targetAgents[0] ?? 'unknown';
+    const lockSource = getOwnerRepo(parsed) || source;
+
+    for (const rule of selectedRules) {
+      if (!successfulRuleNames.has(rule.name)) continue;
+
+      try {
+        const ruleResourcePath = relative(rulesDir, rule.path).split('\\').join('/');
+        const ruleHash = computeContentHash(rule.content);
+
+        const lockEntry = {
+          source: lockSource,
+          sourceType: parsed.type,
+          sourceUrl: parsed.url,
+          resourceType: 'rule' as const,
+          targetType,
+          sourceRef: parsed.ref ?? '',
+          resourcePath: ruleResourcePath,
+          remoteHash: ruleHash,
+          skillPath: ruleResourcePath,
+          skillFolderHash: ruleHash,
+        };
+
+        if (installGlobally) {
+          await addSkillToLock(rule.name, lockEntry);
+        } else {
+          await addSkillToLocalLock(
+            rule.name,
+            {
+              ...lockEntry,
+              computedHash: ruleHash,
+            },
+            cwd
+          );
+        }
+      } catch {
+        // Don't fail installation if lock file update fails
+      }
+    }
+  }
 
   if (successful.length > 0) {
     const installedNames = Array.from(new Set(successful.map((result) => result.rule)));
