@@ -127,6 +127,17 @@ This is a test skill.
       expect(existsSync(join(skillsDir, 'skill-three'))).toBe(false);
     });
 
+    it("should remove all skills with '--skill *' flag", () => {
+      const result = runCli(['remove', '--skill', '*', '-y'], testDir);
+
+      expect(result.stdout).toContain('Successfully removed');
+      expect(result.stdout).toContain('3 skill');
+
+      expect(existsSync(join(skillsDir, 'skill-one'))).toBe(false);
+      expect(existsSync(join(skillsDir, 'skill-two'))).toBe(false);
+      expect(existsSync(join(skillsDir, 'skill-three'))).toBe(false);
+    });
+
     it('should show error for non-existent skill name when skills exist', () => {
       const result = runCli(['remove', 'non-existent', '-y'], testDir);
 

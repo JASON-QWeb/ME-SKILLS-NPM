@@ -240,13 +240,17 @@ export async function removeCommand(skillNames: string[], options: RemoveOptions
   if (options.all) {
     selectedSkills = installedSkills;
   } else if (skillNames.length > 0) {
-    selectedSkills = installedSkills.filter((s) =>
-      skillNames.some((name) => name.toLowerCase() === s.toLowerCase())
-    );
+    if (skillNames.includes('*')) {
+      selectedSkills = installedSkills;
+    } else {
+      selectedSkills = installedSkills.filter((s) =>
+        skillNames.some((name) => name.toLowerCase() === s.toLowerCase())
+      );
 
-    if (selectedSkills.length === 0) {
-      p.log.error(`No matching skills found for: ${skillNames.join(', ')}`);
-      return;
+      if (selectedSkills.length === 0) {
+        p.log.error(`No matching skills found for: ${skillNames.join(', ')}`);
+        return;
+      }
     }
   } else {
     const choices = installedSkills.map((s) => ({
@@ -450,7 +454,14 @@ export function parseRemoveOptions(args: string[]): { skills: string[]; options:
     } else if (arg === '--rule') {
       options.resourceType = 'rule';
     } else if (arg === '-s' || arg === '--skill') {
-      options.resourceType = 'skill';
+      i++;
+      let nextArg = args[i];
+      while (i < args.length && nextArg && !nextArg.startsWith('-')) {
+        skills.push(nextArg);
+        i++;
+        nextArg = args[i];
+      }
+      i--; // Back up one since the loop will increment
     } else if (arg === '--all') {
       options.all = true;
     } else if (arg === '-a' || arg === '--agent') {

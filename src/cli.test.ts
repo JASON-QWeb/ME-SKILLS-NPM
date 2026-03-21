@@ -29,6 +29,7 @@ describe('skillshub CLI', () => {
       expect(output).toContain('Usage: skillshub remove [skills...] [options]');
       expect(output).toContain('skillshub remove');
       expect(output).toContain('skillshub rm --agent claude-code my-skill');
+      expect(output).toContain('--rule');
     });
 
     it('should show same output for -h alias', () => {

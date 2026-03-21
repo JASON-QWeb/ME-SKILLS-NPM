@@ -203,6 +203,7 @@ ${BOLD}Options:${RESET}
   -g, --global       Remove from global scope (~/) instead of project scope
   -a, --agent        Remove from specific agents (use '*' for all agents)
   -s, --skill        Specify skills to remove (use '*' for all skills)
+  --rule             Remove rule resources instead of skills
   -y, --yes          Skip confirmation prompts
   --all              Shorthand for --skill '*' --agent '*' -y
 
@@ -214,6 +215,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} skillshub rm --agent claude-code my-skill   ${DIM}# remove from specific agent${RESET}
   ${DIM}$${RESET} skillshub remove --all                      ${DIM}# remove all skills${RESET}
   ${DIM}$${RESET} skillshub remove --skill '*' -a cursor      ${DIM}# remove all skills from cursor${RESET}
+  ${DIM}$${RESET} skillshub remove --rule react -y             ${DIM}# remove a rule${RESET}
 
 Discover more skills at ${TEXT}https://skills.sh/${RESET}
 `);
