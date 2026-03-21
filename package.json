@@ -1,11 +1,10 @@
 {
-  "name": "skills",
+  "name": "skillshub",
   "version": "1.4.5",
-  "description": "The open agent skills ecosystem",
+  "description": "SkillsHub CLI for agent skills and rules",
   "type": "module",
   "bin": {
-    "skills": "./bin/cli.mjs",
-    "add-skill": "./bin/cli.mjs"
+    "skillshub": "./bin/cli.mjs"
   },
   "files": [
     "dist",
