@@ -57,7 +57,7 @@ describe('local-lock', () => {
 
         const lock = await readLocalLock(dir);
         expect(lock.version).toBe(2);
-        expect(lock.skills['my-skill']).toMatchObject({
+        expect(lock.skills['skill:my-skill']).toMatchObject({
           source: 'vercel-labs/skills',
           sourceType: 'github',
           resourceType: 'skill',
@@ -154,7 +154,7 @@ describe('local-lock', () => {
 
         const parsed = JSON.parse(raw);
         const keys = Object.keys(parsed.skills);
-        expect(keys).toEqual(['alpha-skill', 'middle-skill', 'zebra-skill']);
+        expect(keys).toEqual(['skill:alpha-skill', 'skill:middle-skill', 'skill:zebra-skill']);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -172,6 +172,7 @@ describe('local-lock', () => {
             sourceType: 'github',
             resourceType: 'skill',
             targetType: 'claude-code',
+            targetTypes: ['claude-code', 'cursor'],
             sourceRef: 'main',
             resourcePath: 'skills/new-skill/SKILL.md',
             remoteHash: 'hash123',
@@ -181,11 +182,12 @@ describe('local-lock', () => {
         );
 
         const lock = await readLocalLock(dir);
-        expect(lock.skills['new-skill']).toMatchObject({
+        expect(lock.skills['skill:new-skill']).toMatchObject({
           source: 'org/repo',
           sourceType: 'github',
           resourceType: 'skill',
           targetType: 'claude-code',
+          targetTypes: ['claude-code', 'cursor'],
           sourceRef: 'main',
           resourcePath: 'skills/new-skill/SKILL.md',
           remoteHash: 'hash123',
@@ -229,7 +231,7 @@ describe('local-lock', () => {
         );
 
         const lock = await readLocalLock(dir);
-        expect(lock.skills['my-skill']!.computedHash).toBe('new-hash');
+        expect(lock.skills['skill:my-skill']!.computedHash).toBe('new-hash');
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -269,8 +271,57 @@ describe('local-lock', () => {
 
         const lock = await readLocalLock(dir);
         expect(Object.keys(lock.skills)).toHaveLength(2);
-        expect(lock.skills['skill-a']!.computedHash).toBe('aaa');
-        expect(lock.skills['skill-b']!.computedHash).toBe('bbb');
+        expect(lock.skills['skill:skill-a']!.computedHash).toBe('aaa');
+        expect(lock.skills['skill:skill-b']!.computedHash).toBe('bbb');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('keeps skill and rule entries with the same name separate', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'lock-test-'));
+      try {
+        await addSkillToLocalLock(
+          'react',
+          {
+            source: 'org/repo',
+            sourceType: 'github',
+            resourceType: 'skill',
+            targetType: 'codex',
+            targetTypes: ['codex'],
+            sourceRef: 'main',
+            resourcePath: 'skills/react/SKILL.md',
+            remoteHash: 'skill-hash',
+            computedHash: 'skill-hash',
+          },
+          dir
+        );
+        await addSkillToLocalLock(
+          'react',
+          {
+            source: 'org/repo',
+            sourceType: 'github',
+            resourceType: 'rule',
+            targetType: 'cline-me',
+            targetTypes: ['cline-me'],
+            sourceRef: 'main',
+            resourcePath: 'rules/react.md',
+            remoteHash: 'rule-hash',
+            computedHash: 'rule-hash',
+          },
+          dir
+        );
+
+        const lock = await readLocalLock(dir);
+        expect(Object.keys(lock.skills).sort()).toEqual(['rule:react', 'skill:react']);
+        expect(lock.skills['skill:react']).toMatchObject({
+          resourceType: 'skill',
+          resourcePath: 'skills/react/SKILL.md',
+        });
+        expect(lock.skills['rule:react']).toMatchObject({
+          resourceType: 'rule',
+          resourcePath: 'rules/react.md',
+        });
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -300,7 +351,7 @@ describe('local-lock', () => {
         expect(removed).toBe(true);
 
         const lock = await readLocalLock(dir);
-        expect(lock.skills['my-skill']).toBeUndefined();
+        expect(lock.skills['skill:my-skill']).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -480,14 +531,14 @@ describe('local-lock', () => {
         // Both branches produce valid JSON with no timestamps to conflict on
         const parsedA = JSON.parse(branchA);
         const parsedB = JSON.parse(branchB);
-        expect(parsedA.skills['skill-a']).toBeDefined();
-        expect(parsedA.skills['skill-a'].computedHash).toBeDefined();
-        expect(parsedB.skills['skill-b']).toBeDefined();
-        expect(parsedB.skills['skill-b'].computedHash).toBeDefined();
+        expect(parsedA.skills['skill:skill-a']).toBeDefined();
+        expect(parsedA.skills['skill:skill-a'].computedHash).toBeDefined();
+        expect(parsedB.skills['skill:skill-b']).toBeDefined();
+        expect(parsedB.skills['skill:skill-b'].computedHash).toBeDefined();
 
         // No timestamps present
-        expect(parsedA.skills['skill-a'].installedAt).toBeUndefined();
-        expect(parsedA.skills['skill-a'].updatedAt).toBeUndefined();
+        expect(parsedA.skills['skill:skill-a'].installedAt).toBeUndefined();
+        expect(parsedA.skills['skill:skill-a'].updatedAt).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
       }

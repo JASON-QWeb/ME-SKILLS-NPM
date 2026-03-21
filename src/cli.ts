@@ -3,7 +3,6 @@
 import { spawnSync } from 'child_process';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { basename, join, dirname } from 'path';
-import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
@@ -17,6 +16,7 @@ import {
   fetchSkillFolderHash,
   fetchRuleFileHash,
   getGitHubToken,
+  parseLockResourceKey,
   readSkillLock as readGlobalSkillLock,
   type SkillLockEntry as GlobalSkillLockEntry,
 } from './skill-lock.ts';
@@ -297,55 +297,6 @@ Describe when this skill should be used.
 // Check and Update Commands
 // ============================================
 
-const STATE_DIR = '.skillshub';
-const LOCK_FILE = 'skillshub-lock.json';
-const LEGACY_STATE_DIR = '.agents';
-const LEGACY_LOCK_FILE = '.skill-lock.json';
-const CURRENT_LOCK_VERSION = 4;
-
-interface SkillLockEntry {
-  source: string;
-  sourceType: string;
-  sourceUrl: string;
-  skillPath?: string;
-  /** GitHub tree SHA for the entire skill folder (v3) */
-  skillFolderHash: string;
-  installedAt: string;
-  updatedAt: string;
-}
-
-interface SkillLockFile {
-  version: number;
-  skills: Record<string, SkillLockEntry>;
-}
-
-function getSkillLockPath(): string {
-  const xdgStateHome = process.env.XDG_STATE_HOME;
-  if (xdgStateHome) {
-    return join(xdgStateHome, STATE_DIR, LOCK_FILE);
-  }
-  return join(homedir(), STATE_DIR, LOCK_FILE);
-}
-
-function readSkillLock(): SkillLockFile {
-  const lockPath = getSkillLockPath();
-  try {
-    const content = readFileSync(lockPath, 'utf-8');
-    const parsed = JSON.parse(content) as SkillLockFile;
-    if (typeof parsed.version !== 'number' || !parsed.skills) {
-      return { version: CURRENT_LOCK_VERSION, skills: {} };
-    }
-    // If old version, wipe and start fresh (backwards incompatible change)
-    // v3 adds skillFolderHash - we want fresh installs to populate it
-    if (parsed.version < CURRENT_LOCK_VERSION) {
-      return { version: CURRENT_LOCK_VERSION, skills: {} };
-    }
-    return parsed;
-  } catch {
-    return { version: CURRENT_LOCK_VERSION, skills: {} };
-  }
-}
-
 interface SkippedSkill {
   name: string;
   reason: string;
@@ -356,8 +307,8 @@ interface SkippedSkill {
 /**
  * Determine why a skill cannot be checked for updates automatically.
  */
-function getSkipReason(entry: SkillLockEntry | GlobalSkillLockEntry | LocalSkillLockEntry): string {
-  const resourceType = 'resourceType' in entry ? entry.resourceType : 'skill';
+function getSkipReason(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  const resourceType = entry.resourceType ?? 'skill';
   if (entry.sourceType === 'local') {
     return 'Local path';
   }
@@ -450,18 +401,25 @@ function buildGithubTreeUrl(sourceUrl: string, ref: string, resourcePath: string
   return path ? `${base}/tree/${ref}/${path}` : `${base}/tree/${ref}`;
 }
 
+function getEntryTargetTypes(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string[] {
+  if (Array.isArray(entry.targetTypes) && entry.targetTypes.length > 0) {
+    return [...new Set(entry.targetTypes.filter((value): value is string => Boolean(value)))];
+  }
+  return entry.targetType ? [entry.targetType] : [];
+}
+
 export async function collectTrackedUpdateEntries(
   cwd: string = process.cwd()
 ): Promise<TrackedUpdateEntry[]> {
   const [globalLock, localLock] = await Promise.all([readGlobalSkillLock(), readLocalLock(cwd)]);
 
-  const globalEntries = Object.entries(globalLock.skills).map(([name, entry]) => ({
-    name,
+  const globalEntries = Object.entries(globalLock.skills).map(([key, entry]) => ({
+    name: parseLockResourceKey(key, entry.resourceType).name,
     scope: 'global' as const,
     entry,
   }));
-  const localEntries = Object.entries(localLock.skills).map(([name, entry]) => ({
-    name,
+  const localEntries = Object.entries(localLock.skills).map(([key, entry]) => ({
+    name: parseLockResourceKey(key, entry.resourceType).name,
     scope: 'project' as const,
     entry,
   }));
@@ -493,6 +451,10 @@ export function buildUpdateInstallInvocation(update: TrackedUpdateEntry): {
   const args = ['add', sourceUrl];
   if (resourceType === 'rule') {
     args.push('--rule', '--skill', getRuleName(resourcePath) || update.name);
+  }
+  const targetTypes = getEntryTargetTypes(entry);
+  if (targetTypes.length > 0) {
+    args.push('--agent', ...targetTypes);
   }
   if (update.scope === 'global') {
     args.push('-g');
@@ -532,7 +494,7 @@ async function runCheck(args: string[] = []): Promise<void> {
     if (entry.sourceType !== 'github' || !remoteHash || !resourcePath) {
       skipped.push({
         name,
-        reason: getSkipReason(entry as SkillLockEntry | GlobalSkillLockEntry | LocalSkillLockEntry),
+        reason: getSkipReason(entry),
         sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
         command: `npx skillshub ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
       });
@@ -629,7 +591,7 @@ async function runUpdate(): Promise<void> {
     if (entry.sourceType !== 'github' || !remoteHash || !resourcePath) {
       skipped.push({
         name,
-        reason: getSkipReason(entry as SkillLockEntry | GlobalSkillLockEntry | LocalSkillLockEntry),
+        reason: getSkipReason(entry),
         sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
         command: `npx skillshub ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
       });

@@ -56,6 +56,7 @@ describe('update tracking', () => {
             sourceUrl: 'https://github.com/vercel-labs/skills.git',
             resourceType: 'skill',
             targetType: 'codex',
+            targetTypes: ['codex', 'cursor'],
             sourceRef: 'main',
             resourcePath: 'skills/global-skill/SKILL.md',
             remoteHash: 'global-hash',
@@ -75,6 +76,7 @@ describe('update tracking', () => {
               sourceType: 'github',
               resourceType: 'rule',
               targetType: 'cline-me',
+              targetTypes: ['cline-me', 'codex'],
               sourceRef: 'feature/rules',
               resourcePath: 'rules/project-rule.md',
               remoteHash: 'project-hash',
@@ -92,10 +94,21 @@ describe('update tracking', () => {
           name,
           scope,
           resourceType: entry.resourceType,
+          targetTypes: entry.targetTypes,
         }))
       ).toEqual([
-        { name: 'global-skill', scope: 'global', resourceType: 'skill' },
-        { name: 'project-rule', scope: 'project', resourceType: 'rule' },
+        {
+          name: 'global-skill',
+          scope: 'global',
+          resourceType: 'skill',
+          targetTypes: ['codex', 'cursor'],
+        },
+        {
+          name: 'project-rule',
+          scope: 'project',
+          resourceType: 'rule',
+          targetTypes: ['cline-me', 'codex'],
+        },
       ]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -113,6 +126,7 @@ describe('update tracking', () => {
         sourceUrl: 'https://github.com/vercel-labs/skills.git',
         resourceType: 'skill',
         targetType: 'codex',
+        targetTypes: ['codex', 'cursor'],
         sourceRef: 'release/v1',
         resourcePath: 'skills/global-skill/SKILL.md',
         remoteHash: 'global-hash',
@@ -125,6 +139,15 @@ describe('update tracking', () => {
     expect(skillUpdate.sourceUrl).toBe(
       'https://github.com/vercel-labs/skills/tree/release/v1/skills/global-skill'
     );
+    expect(skillUpdate.args).toEqual([
+      'add',
+      'https://github.com/vercel-labs/skills/tree/release/v1/skills/global-skill',
+      '--agent',
+      'codex',
+      'cursor',
+      '-g',
+      '-y',
+    ]);
     expect(skillUpdate.args).toContain('-g');
     expect(skillUpdate.args).toContain('-y');
 
@@ -137,6 +160,7 @@ describe('update tracking', () => {
         sourceUrl: 'https://github.com/vercel-labs/skills.git',
         resourceType: 'rule',
         targetType: 'cline-me',
+        targetTypes: ['cline-me'],
         sourceRef: 'feature/rules',
         resourcePath: 'packages/ui/rules/angular.md',
         remoteHash: 'rule-hash',
@@ -151,6 +175,8 @@ describe('update tracking', () => {
     expect(ruleUpdate.args).toContain('--rule');
     expect(ruleUpdate.args).toContain('--skill');
     expect(ruleUpdate.args).toContain('angular');
+    expect(ruleUpdate.args).toContain('--agent');
+    expect(ruleUpdate.args).toContain('cline-me');
     expect(ruleUpdate.args).not.toContain('-g');
   });
 

@@ -27,6 +27,8 @@ export interface SkillLockEntry {
   resourceType: ResourceType;
   /** Target agent / tool name associated with the install. */
   targetType: string;
+  /** Full target agent set selected during install, preserved for updates. */
+  targetTypes?: string[];
   /** Source ref (branch, tag, commit, etc.) used when the resource was installed. */
   sourceRef: string;
   /** Repo-relative path to the resource, or the original source path if unavailable. */
@@ -61,7 +63,7 @@ export interface DismissedPrompts {
 export interface SkillLockFile {
   /** Schema version for future migrations */
   version: number;
-  /** Map of skill name to its lock entry */
+  /** Map of stable resource key (`resourceType:name`) to its lock entry */
   skills: Record<string, SkillLockEntry>;
   /** Tracks dismissed prompts */
   dismissed?: DismissedPrompts;
@@ -93,6 +95,12 @@ function getLegacySkillLockPath(): string {
 function normalizeSkillLockEntry(entry: Partial<SkillLockEntry>): SkillLockEntry {
   const remoteHash = entry.remoteHash ?? entry.skillFolderHash ?? '';
   const resourcePath = entry.resourcePath ?? entry.skillPath ?? '';
+  const targetType = entry.targetType ?? entry.targetTypes?.[0] ?? '';
+  const targetTypes = Array.isArray(entry.targetTypes)
+    ? [...new Set(entry.targetTypes.filter(Boolean))]
+    : targetType
+      ? [targetType]
+      : undefined;
 
   return {
     source: entry.source ?? '',
@@ -100,7 +108,8 @@ function normalizeSkillLockEntry(entry: Partial<SkillLockEntry>): SkillLockEntry
     sourceUrl: entry.sourceUrl ?? '',
     skillPath: entry.skillPath,
     resourceType: entry.resourceType ?? 'skill',
-    targetType: entry.targetType ?? '',
+    targetType,
+    targetTypes,
     sourceRef: entry.sourceRef ?? '',
     resourcePath,
     remoteHash,
@@ -111,10 +120,32 @@ function normalizeSkillLockEntry(entry: Partial<SkillLockEntry>): SkillLockEntry
   };
 }
 
+export function buildLockResourceKey(name: string, resourceType: ResourceType): string {
+  return `${resourceType}:${name}`;
+}
+
+export function parseLockResourceKey(
+  key: string,
+  fallbackResourceType: ResourceType = 'skill'
+): { name: string; resourceType: ResourceType } {
+  if (key.startsWith('skill:')) {
+    return { name: key.slice('skill:'.length), resourceType: 'skill' };
+  }
+  if (key.startsWith('rule:')) {
+    return { name: key.slice('rule:'.length), resourceType: 'rule' };
+  }
+  return { name: key, resourceType: fallbackResourceType };
+}
+
 function normalizeSkillLockFile(parsed: Partial<SkillLockFile>): SkillLockFile {
   const normalizedSkills: Record<string, SkillLockEntry> = {};
   for (const [name, entry] of Object.entries(parsed.skills ?? {})) {
-    normalizedSkills[name] = normalizeSkillLockEntry(entry as Partial<SkillLockEntry>);
+    const normalizedEntry = normalizeSkillLockEntry(entry as Partial<SkillLockEntry>);
+    const normalizedKey = buildLockResourceKey(
+      parseLockResourceKey(name, normalizedEntry.resourceType).name,
+      normalizedEntry.resourceType
+    );
+    normalizedSkills[normalizedKey] = normalizedEntry;
   }
 
   return {
@@ -349,11 +380,13 @@ export async function addSkillToLock(
 ): Promise<void> {
   const lock = await readSkillLock();
   const now = new Date().toISOString();
+  const normalizedEntry = normalizeSkillLockEntry(entry);
+  const lockKey = buildLockResourceKey(skillName, normalizedEntry.resourceType);
 
-  const existingEntry = lock.skills[skillName];
+  const existingEntry = lock.skills[lockKey];
 
-  lock.skills[skillName] = {
-    ...normalizeSkillLockEntry(entry),
+  lock.skills[lockKey] = {
+    ...normalizedEntry,
     installedAt: existingEntry?.installedAt ?? now,
     updatedAt: now,
   };
@@ -364,14 +397,18 @@ export async function addSkillToLock(
 /**
  * Remove a skill from the lock file.
  */
-export async function removeSkillFromLock(skillName: string): Promise<boolean> {
+export async function removeSkillFromLock(
+  skillName: string,
+  resourceType: ResourceType = 'skill'
+): Promise<boolean> {
   const lock = await readSkillLock();
+  const lockKey = buildLockResourceKey(skillName, resourceType);
 
-  if (!(skillName in lock.skills)) {
+  if (!(lockKey in lock.skills)) {
     return false;
   }
 
-  delete lock.skills[skillName];
+  delete lock.skills[lockKey];
   await writeSkillLock(lock);
   return true;
 }
@@ -379,9 +416,12 @@ export async function removeSkillFromLock(skillName: string): Promise<boolean> {
 /**
  * Get a skill entry from the lock file.
  */
-export async function getSkillFromLock(skillName: string): Promise<SkillLockEntry | null> {
+export async function getSkillFromLock(
+  skillName: string,
+  resourceType: ResourceType = 'skill'
+): Promise<SkillLockEntry | null> {
   const lock = await readSkillLock();
-  return lock.skills[skillName] ?? null;
+  return lock.skills[buildLockResourceKey(skillName, resourceType)] ?? null;
 }
 
 /**
@@ -401,7 +441,8 @@ export async function getSkillsBySource(): Promise<
   const lock = await readSkillLock();
   const bySource = new Map<string, { skills: string[]; entry: SkillLockEntry }>();
 
-  for (const [skillName, entry] of Object.entries(lock.skills)) {
+  for (const [skillKey, entry] of Object.entries(lock.skills)) {
+    const skillName = parseLockResourceKey(skillKey, entry.resourceType).name;
     const existing = bySource.get(entry.source);
     if (existing) {
       existing.skills.push(skillName);

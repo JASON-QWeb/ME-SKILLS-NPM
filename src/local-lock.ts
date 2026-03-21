@@ -2,6 +2,7 @@ import { readFile, writeFile, readdir, stat } from 'fs/promises';
 import { join, relative } from 'path';
 import { createHash } from 'crypto';
 import type { ResourceType } from './types.ts';
+import { buildLockResourceKey, parseLockResourceKey } from './skill-lock.ts';
 
 const LOCAL_LOCK_FILE = 'skillshub-lock.json';
 const LEGACY_LOCAL_LOCK_FILE = 'skills-lock.json';
@@ -23,6 +24,8 @@ export interface LocalSkillLockEntry {
   resourceType: ResourceType;
   /** Target agent / tool name associated with the install. */
   targetType: string;
+  /** Full target agent set selected during install, preserved for updates. */
+  targetTypes?: string[];
   /** Source ref (branch, tag, commit, etc.) used when the resource was installed. */
   sourceRef: string;
   /** Repo-relative path to the resource, or the original source path if unavailable. */
@@ -55,7 +58,7 @@ export interface LocalSkillLockEntry {
 export interface LocalSkillLockFile {
   /** Schema version for future migrations */
   version: number;
-  /** Map of skill name to its lock entry (sorted alphabetically) */
+  /** Map of stable resource key (`resourceType:name`) to its lock entry (sorted alphabetically) */
   skills: Record<string, LocalSkillLockEntry>;
 }
 
@@ -73,12 +76,19 @@ function getLegacyLocalLockPath(cwd?: string): string {
 function normalizeLocalEntry(entry: Partial<LocalSkillLockEntry>): LocalSkillLockEntry {
   const remoteHash = entry.remoteHash ?? entry.skillFolderHash ?? entry.computedHash ?? '';
   const resourcePath = entry.resourcePath ?? entry.skillPath ?? '';
+  const targetType = entry.targetType ?? entry.targetTypes?.[0] ?? '';
+  const targetTypes = Array.isArray(entry.targetTypes)
+    ? [...new Set(entry.targetTypes.filter(Boolean))]
+    : targetType
+      ? [targetType]
+      : undefined;
 
   return {
     source: entry.source ?? '',
     sourceType: entry.sourceType ?? '',
     resourceType: entry.resourceType ?? 'skill',
-    targetType: entry.targetType ?? '',
+    targetType,
+    targetTypes,
     sourceRef: entry.sourceRef ?? '',
     resourcePath,
     remoteHash,
@@ -93,7 +103,12 @@ function normalizeLocalEntry(entry: Partial<LocalSkillLockEntry>): LocalSkillLoc
 function normalizeLocalLockFile(parsed: Partial<LocalSkillLockFile>): LocalSkillLockFile {
   const normalizedSkills: Record<string, LocalSkillLockEntry> = {};
   for (const [name, entry] of Object.entries(parsed.skills ?? {})) {
-    normalizedSkills[name] = normalizeLocalEntry(entry as Partial<LocalSkillLockEntry>);
+    const normalizedEntry = normalizeLocalEntry(entry as Partial<LocalSkillLockEntry>);
+    const normalizedKey = buildLockResourceKey(
+      parseLockResourceKey(name, normalizedEntry.resourceType).name,
+      normalizedEntry.resourceType
+    );
+    normalizedSkills[normalizedKey] = normalizedEntry;
   }
 
   return {
@@ -213,21 +228,27 @@ export async function addSkillToLocalLock(
   cwd?: string
 ): Promise<void> {
   const lock = await readLocalLock(cwd);
-  lock.skills[skillName] = entry;
+  const normalizedEntry = normalizeLocalEntry(entry);
+  lock.skills[buildLockResourceKey(skillName, normalizedEntry.resourceType)] = normalizedEntry;
   await writeLocalLock(lock, cwd);
 }
 
 /**
  * Remove a skill from the local lock file.
  */
-export async function removeSkillFromLocalLock(skillName: string, cwd?: string): Promise<boolean> {
+export async function removeSkillFromLocalLock(
+  skillName: string,
+  cwd?: string,
+  resourceType: ResourceType = 'skill'
+): Promise<boolean> {
   const lock = await readLocalLock(cwd);
+  const lockKey = buildLockResourceKey(skillName, resourceType);
 
-  if (!(skillName in lock.skills)) {
+  if (!(lockKey in lock.skills)) {
     return false;
   }
 
-  delete lock.skills[skillName];
+  delete lock.skills[lockKey];
   await writeLocalLock(lock, cwd);
   return true;
 }

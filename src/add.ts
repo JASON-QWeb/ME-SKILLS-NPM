@@ -777,6 +777,7 @@ async function handleWellKnownSkills(
   if (successful.length > 0 && installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
     const targetType = targetAgents[0] ?? 'unknown';
+    const targetTypes = [...targetAgents];
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
         try {
@@ -786,6 +787,7 @@ async function handleWellKnownSkills(
             sourceUrl: skill.sourceUrl,
             resourceType: 'skill',
             targetType,
+            targetTypes,
             sourceRef: '',
             resourcePath: skill.installName,
             remoteHash: '',
@@ -802,6 +804,7 @@ async function handleWellKnownSkills(
   if (successful.length > 0 && !installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
     const targetType = targetAgents[0] ?? 'unknown';
+    const targetTypes = [...targetAgents];
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
         try {
@@ -817,6 +820,7 @@ async function handleWellKnownSkills(
                 sourceUrl: skill.sourceUrl,
                 resourceType: 'skill',
                 targetType,
+                targetTypes,
                 sourceRef: '',
                 resourcePath: skill.installName,
                 remoteHash: computedHash,
@@ -1519,6 +1523,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     if (successful.length > 0 && installGlobally && normalizedSource) {
       const successfulSkillNames = new Set(successful.map((r) => r.skill));
       const targetType = targetAgents[0] ?? 'unknown';
+      const targetTypes = [...targetAgents];
       for (const skill of selectedSkills) {
         const skillDisplayName = getSkillDisplayName(skill);
         if (successfulSkillNames.has(skillDisplayName)) {
@@ -1544,6 +1549,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
               skillPath: skillPathValue,
               resourceType: 'skill',
               targetType,
+              targetTypes,
               sourceRef: parsed.ref ?? '',
               resourcePath: skillPathValue || skill.path,
               remoteHash: skillFolderHash,
@@ -1561,6 +1567,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     if (successful.length > 0 && !installGlobally) {
       const successfulSkillNames = new Set(successful.map((r) => r.skill));
       const targetType = targetAgents[0] ?? 'unknown';
+      const targetTypes = [...targetAgents];
       for (const skill of selectedSkills) {
         const skillDisplayName = getSkillDisplayName(skill);
         if (successfulSkillNames.has(skillDisplayName)) {
@@ -1574,6 +1581,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
                 sourceUrl: parsed.url,
                 resourceType: 'skill',
                 targetType,
+                targetTypes,
                 sourceRef: parsed.ref ?? '',
                 resourcePath: skill.path,
                 remoteHash: computedHash,
@@ -2018,6 +2026,7 @@ async function handleRuleInstallation(
   if (successful.length > 0) {
     const successfulRuleNames = new Set(successful.map((result) => result.rule));
     const targetType = targetAgents[0] ?? 'unknown';
+    const targetTypes = [...targetAgents];
     const lockSource = getOwnerRepo(parsed) || source;
 
     for (const rule of selectedRules) {
@@ -2033,6 +2042,7 @@ async function handleRuleInstallation(
           sourceUrl: parsed.url,
           resourceType: 'rule' as const,
           targetType,
+          targetTypes,
           sourceRef: parsed.ref ?? '',
           resourcePath: ruleResourcePath,
           remoteHash: ruleHash,

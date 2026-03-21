@@ -13,6 +13,7 @@ import {
 } from './agents.ts';
 import { searchMultiselect } from './prompts/search-multiselect.ts';
 import { addSkillToLocalLock, computeSkillFolderHash, readLocalLock } from './local-lock.ts';
+import { buildLockResourceKey } from './skill-lock.ts';
 import type { Skill, AgentType } from './types.ts';
 import { track } from './telemetry.ts';
 
@@ -169,7 +170,7 @@ export async function runSync(args: string[], options: SyncOptions = {}): Promis
     p.log.info(pc.dim('Force mode: reinstalling all skills'));
   } else {
     for (const skill of discoveredSkills) {
-      const existingEntry = localLock.skills[skill.name];
+      const existingEntry = localLock.skills[buildLockResourceKey(skill.name, 'skill')];
       if (existingEntry) {
         // Compute current hash and compare
         const currentHash = await computeSkillFolderHash(skill.path);
@@ -350,6 +351,7 @@ export async function runSync(args: string[], options: SyncOptions = {}): Promis
   const failed = results.filter((r) => !r.success);
   const successfulSkillNames = new Set(successful.map((r) => r.skill));
   const targetType = targetAgents[0] ?? 'unknown';
+  const targetTypes = [...targetAgents];
 
   for (const skill of toInstall) {
     if (successfulSkillNames.has(skill.name)) {
@@ -362,6 +364,7 @@ export async function runSync(args: string[], options: SyncOptions = {}): Promis
             sourceType: 'node_modules',
             resourceType: 'skill',
             targetType,
+            targetTypes,
             sourceRef: '',
             resourcePath: skill.path,
             remoteHash: computedHash,

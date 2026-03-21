@@ -70,6 +70,7 @@ describe('skillshub-lock', () => {
             sourceUrl: 'https://github.com/vercel-labs/skills',
             resourceType: 'rule',
             targetType: 'cline-me',
+            targetTypes: ['cline-me', 'codex'],
             sourceRef: 'main',
             resourcePath: 'rules/react.md',
             remoteHash: 'hash-1',
@@ -89,14 +90,15 @@ describe('skillshub-lock', () => {
         dismissed: { findSkillsPrompt: true },
         lastSelectedAgents: ['codex', 'cline-me'],
       });
-      expect(lock.skills['react-rules']).toMatchObject({
+      expect(lock.skills['rule:react-rules']).toMatchObject({
         resourceType: 'rule',
         targetType: 'cline-me',
+        targetTypes: ['cline-me', 'codex'],
         sourceRef: 'main',
         resourcePath: 'rules/react.md',
         remoteHash: 'hash-1',
       });
-      expect(await getAllLockedSkills()).toHaveProperty('react-rules');
+      expect(await getAllLockedSkills()).toHaveProperty('rule:react-rules');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -114,6 +116,7 @@ describe('skillshub-lock', () => {
         sourceUrl: 'https://github.com/vercel-labs/skills',
         resourceType: 'rule',
         targetType: 'cline-me',
+        targetTypes: ['cline-me'],
         sourceRef: 'main',
         resourcePath: 'rules/angular.md',
         remoteHash: 'hash-angular',
@@ -123,17 +126,67 @@ describe('skillshub-lock', () => {
       });
 
       const lock = await readSkillLock();
-      expect(lock.skills.angular).toMatchObject({
+      expect(lock.skills['rule:angular']).toMatchObject({
         resourceType: 'rule',
         targetType: 'cline-me',
+        targetTypes: ['cline-me'],
         sourceRef: 'main',
         resourcePath: 'rules/angular.md',
         remoteHash: 'hash-angular',
       });
 
-      const removed = await removeSkillFromLock('angular');
+      const removed = await removeSkillFromLock('angular', 'rule');
       expect(removed).toBe(true);
-      expect(await getAllLockedSkills()).not.toHaveProperty('angular');
+      expect(await getAllLockedSkills()).not.toHaveProperty('rule:angular');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps skill and rule entries with the same name separate', async () => {
+    const dir = await mkdtemp(join(process.cwd(), 'skillshub-lock-test-'));
+    try {
+      vi.stubEnv('XDG_STATE_HOME', dir);
+      vi.stubEnv('HOME', join(dir, 'home'));
+
+      await addSkillToLock('react', {
+        source: 'vercel-labs/skills',
+        sourceType: 'github',
+        sourceUrl: 'https://github.com/vercel-labs/skills',
+        resourceType: 'skill',
+        targetType: 'codex',
+        targetTypes: ['codex'],
+        sourceRef: 'main',
+        resourcePath: 'skills/react/SKILL.md',
+        remoteHash: 'skill-hash',
+        skillPath: 'skills/react/SKILL.md',
+        skillFolderHash: 'skill-hash',
+      });
+
+      await addSkillToLock('react', {
+        source: 'vercel-labs/skills',
+        sourceType: 'github',
+        sourceUrl: 'https://github.com/vercel-labs/skills',
+        resourceType: 'rule',
+        targetType: 'cline-me',
+        targetTypes: ['cline-me'],
+        sourceRef: 'main',
+        resourcePath: 'rules/react.md',
+        remoteHash: 'rule-hash',
+        skillPath: 'rules/react.md',
+        skillFolderHash: 'rule-hash',
+      });
+
+      const lock = await readSkillLock();
+      expect(Object.keys(lock.skills).sort()).toEqual(['rule:react', 'skill:react']);
+      expect(lock.skills['skill:react']).toMatchObject({
+        resourceType: 'skill',
+        resourcePath: 'skills/react/SKILL.md',
+      });
+      expect(lock.skills['rule:react']).toMatchObject({
+        resourceType: 'rule',
+        resourcePath: 'rules/react.md',
+      });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

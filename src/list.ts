@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import type { AgentType, ResourceType } from './types.ts';
 import { agents } from './agents.ts';
 import { listInstalledSkills, type InstalledSkill } from './installer.ts';
-import { getAllLockedSkills } from './skill-lock.ts';
+import { buildLockResourceKey, getAllLockedSkills } from './skill-lock.ts';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -148,7 +148,7 @@ export async function runList(args: string[]): Promise<void> {
   const ungroupedSkills: InstalledSkill[] = [];
 
   for (const skill of installedSkills) {
-    const lockEntry = lockedSkills[skill.name];
+    const lockEntry = lockedSkills[buildLockResourceKey(skill.name, resourceType)];
     if (lockEntry?.pluginName) {
       const group = lockEntry.pluginName;
       if (!groupedSkills[group]) {
