@@ -12,6 +12,14 @@ Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [39 more](#av
 npx skillshub add vercel-labs/agent-skills
 ```
 
+## Install a Rule
+
+```bash
+npx skillshub add https://github.com/org/repo --rule
+```
+
+Rules are single Markdown files in a repository's `rules/` directory. The file name without `.md` becomes the rule name.
+
 ### Source Formats
 
 ```bash
@@ -41,6 +49,7 @@ npx skillshub add ./my-local-skills
 | `-g, --global`            | Install to user directory instead of project                                                                                                       |
 | `-a, --agent <agents...>` | <!-- agent-names:start -->Target specific agents (e.g., `claude-code`, `codex`). See [Available Agents](#available-agents)<!-- agent-names:end --> |
 | `-s, --skill <skills...>` | Install specific skills by name (use `'*'` for all skills)                                                                                         |
+| `--rule`                  | Install rules from a repository's `rules/` directory                                                                                                |
 | `-l, --list`              | List available skills without installing                                                                                                           |
 | `--copy`                  | Copy files instead of symlinking to agent directories                                                                                              |
 | `-y, --yes`               | Skip all confirmation prompts                                                                                                                      |
@@ -57,6 +66,9 @@ npx skillshub add vercel-labs/agent-skills --skill frontend-design --skill skill
 
 # Install a skill with spaces in the name (must be quoted)
 npx skillshub add owner/repo --skill "Convex Best Practices"
+
+# Install a rule from a repository
+npx skillshub add https://github.com/org/repo --rule
 
 # Install to specific agents
 npx skillshub add vercel-labs/agent-skills -a claude-code -a opencode
@@ -90,6 +102,10 @@ When installing interactively, you can choose:
 | **Symlink** (Recommended) | Creates symlinks from each agent to a canonical copy. Single source of truth, easy updates. |
 | **Copy**                  | Creates independent copies for each agent. Use when symlinks aren't supported.              |
 
+### Cline-Me Support
+
+`Cline-Me` installs skills to `.cline/skills/` in project scope and `~/.cline/skills/` in global scope. It also supports rules in `.clinerules/` and `~/.clinerules/`.
+
 ## Other Commands
 
 | Command                      | Description                                    |
@@ -97,8 +113,8 @@ When installing interactively, you can choose:
 | `npx skillshub list`            | List installed skills (alias: `ls`)            |
 | `npx skillshub find [query]`    | Search for skills interactively or by keyword  |
 | `npx skillshub remove [skills]` | Remove installed skills from agents            |
-| `npx skillshub check`           | Check for available skill updates              |
-| `npx skillshub update`          | Update all installed skills to latest versions |
+| `npx skillshub check`           | Check for available skill and rule updates     |
+| `npx skillshub update`          | Update all installed skills and rules          |
 | `npx skillshub init [name]`     | Create a new SKILL.md template                 |
 
 ### `skillshub list`
@@ -130,11 +146,13 @@ npx skillshub find typescript
 
 ### `skillshub check` / `skillshub update`
 
+`check` and `update` look at both installed skills and installed rules.
+
 ```bash
 # Check if any installed skills have updates
 npx skillshub check
 
-# Update all skills to latest versions
+# Update all skills and rules to latest versions
 npx skillshub update
 ```
 
@@ -176,6 +194,9 @@ npx skillshub remove --skill '*' -a cursor
 
 # Remove a specific skill from all agents
 npx skillshub remove my-skill --agent '*'
+
+# Remove a rule
+npx skillshub remove --rule react
 
 # Use 'rm' alias
 npx skillshub rm my-skill

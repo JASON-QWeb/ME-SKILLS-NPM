@@ -81,11 +81,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel-labs/skills.git"
+    "url": "git+https://github.com/JASON-QWeb/ME-SKILLS-NPM.git"
   },
-  "homepage": "https://github.com/vercel-labs/skills#readme",
+  "homepage": "https://github.com/JASON-QWeb/ME-SKILLS-NPM#readme",
   "bugs": {
-    "url": "https://github.com/vercel-labs/skills/issues"
+    "url": "https://github.com/JASON-QWeb/ME-SKILLS-NPM/issues"
   },
   "author": "",
   "license": "MIT",

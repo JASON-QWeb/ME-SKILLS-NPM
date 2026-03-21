@@ -115,7 +115,7 @@ Instructions.
       expect(existsSync(lockPath)).toBe(true);
 
       const lock = JSON.parse(readFileSync(lockPath, 'utf-8'));
-      expect(lock.version).toBe(1);
+      expect(lock.version).toBe(2);
       expect(lock.skills['lock-test-skill']).toBeDefined();
       expect(lock.skills['lock-test-skill'].source).toBe('my-pkg');
       expect(lock.skills['lock-test-skill'].sourceType).toBe('node_modules');
