@@ -1,6 +1,6 @@
-# skillshub
+# SkillsHub
 
-The CLI for the open agent skills ecosystem.
+The SkillsHub CLI for the open agent skills ecosystem.
 
 <!-- agent-list:start -->
 Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [39 more](#available-agents).
@@ -101,7 +101,7 @@ When installing interactively, you can choose:
 | `npx skillshub update`          | Update all installed skills to latest versions |
 | `npx skillshub init [name]`     | Create a new SKILL.md template                 |
 
-### `skills list`
+### `skillshub list`
 
 List all installed skills. Similar to `npm ls`.
 
@@ -116,7 +116,7 @@ npx skillshub ls -g
 npx skillshub ls -a claude-code -a cursor
 ```
 
-### `skills find`
+### `skillshub find`
 
 Search for skills interactively or by keyword.
 
@@ -128,7 +128,7 @@ npx skillshub find
 npx skillshub find typescript
 ```
 
-### `skills check` / `skills update`
+### `skillshub check` / `skillshub update`
 
 ```bash
 # Check if any installed skills have updates
@@ -138,7 +138,7 @@ npx skillshub check
 npx skillshub update
 ```
 
-### `skills init`
+### `skillshub init`
 
 ```bash
 # Create SKILL.md in current directory
@@ -148,7 +148,7 @@ npx skillshub init
 npx skillshub init my-skill
 ```
 
-### `skills remove`
+### `skillshub remove`
 
 Remove installed skills from agents.
 

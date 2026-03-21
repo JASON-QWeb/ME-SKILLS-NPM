@@ -23,6 +23,13 @@ describe('skillshub CLI', () => {
       expect(output).toContain('--all');
     });
 
+    it('should display branded remove help', () => {
+      const output = runCliOutput(['remove', '--help']);
+      expect(output).toContain('Usage: skillshub remove [skills...] [options]');
+      expect(output).toContain('skillshub remove');
+      expect(output).toContain('skillshub rm --agent claude-code my-skill');
+    });
+
     it('should show same output for -h alias', () => {
       const helpOutput = runCliOutput(['--help']);
       const hOutput = runCliOutput(['-h']);
