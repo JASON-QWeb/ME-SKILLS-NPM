@@ -3,6 +3,7 @@ export type AgentType =
   | 'antigravity'
   | 'augment'
   | 'claude-code'
+  | 'cline-me'
   | 'openclaw'
   | 'cline'
   | 'codebuddy'
@@ -43,6 +44,13 @@ export type AgentType =
   | 'adal'
   | 'universal';
 
+export type ResourceType = 'skill' | 'rule';
+
+export interface AgentResourceConfig {
+  projectDir: string;
+  globalDir: string | undefined;
+}
+
 export interface Skill {
   name: string;
   description: string;
@@ -60,6 +68,7 @@ export interface AgentConfig {
   skillsDir: string;
   /** Global skills directory. Set to undefined if the agent doesn't support global installation. */
   globalSkillsDir: string | undefined;
+  resources: Record<ResourceType, AgentResourceConfig>;
   detectInstalled: () => Promise<boolean>;
   /** Whether to show this agent in the universal agents list. Defaults to true. */
   showInUniversalList?: boolean;

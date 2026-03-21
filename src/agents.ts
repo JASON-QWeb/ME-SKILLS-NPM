@@ -26,7 +26,27 @@ export function getOpenClawGlobalSkillsDir(
   return join(homeDir, '.openclaw/skills');
 }
 
-export const agents: Record<AgentType, AgentConfig> = {
+function withResourceDefaults(
+  config: Omit<AgentConfig, 'resources'>,
+  overrides?: Partial<AgentConfig['resources']>
+): AgentConfig {
+  return {
+    ...config,
+    resources: {
+      skill: {
+        projectDir: config.skillsDir,
+        globalDir: config.globalSkillsDir,
+      },
+      rule: {
+        projectDir: config.skillsDir,
+        globalDir: config.globalSkillsDir,
+      },
+      ...overrides,
+    },
+  };
+}
+
+const baseAgents: Record<AgentType, Omit<AgentConfig, 'resources'>> = {
   amp: {
     name: 'amp',
     displayName: 'Amp',
@@ -61,6 +81,15 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(claudeHome, 'skills'),
     detectInstalled: async () => {
       return existsSync(claudeHome);
+    },
+  },
+  'cline-me': {
+    name: 'cline-me',
+    displayName: 'Cline-Me',
+    skillsDir: '.cline/skills',
+    globalSkillsDir: join(home, '.cline/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(process.cwd(), '.cline')) || existsSync(join(home, '.cline'));
     },
   },
   openclaw: {
@@ -419,6 +448,24 @@ export const agents: Record<AgentType, AgentConfig> = {
     detectInstalled: async () => false,
   },
 };
+
+export const agents: Record<AgentType, AgentConfig> = Object.fromEntries(
+  Object.entries(baseAgents).map(([type, config]) => {
+    if (type === 'cline-me') {
+      return [
+        type,
+        withResourceDefaults(config, {
+          rule: {
+            projectDir: '.clinerules',
+            globalDir: join(home, '.clinerules'),
+          },
+        }),
+      ];
+    }
+
+    return [type, withResourceDefaults(config)];
+  })
+) as Record<AgentType, AgentConfig>;
 
 export async function detectInstalledAgents(): Promise<AgentType[]> {
   const results = await Promise.all(

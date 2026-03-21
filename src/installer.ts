@@ -14,10 +14,10 @@ import {
 import { existsSync } from 'fs';
 import { join, basename, normalize, resolve, sep, relative, dirname } from 'path';
 import { homedir, platform } from 'os';
-import type { Skill, AgentType, RemoteSkill } from './types.ts';
+import type { Skill, AgentType, RemoteSkill, ResourceType } from './types.ts';
 import type { WellKnownSkill } from './providers/wellknown.ts';
 import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
-import { AGENTS_DIR, SKILLS_SUBDIR } from './constants.ts';
+import { AGENTS_DIR, RULES_SUBDIR, SKILLS_SUBDIR } from './constants.ts';
 import { parseSkillMd } from './skills.ts';
 
 export type InstallMode = 'symlink' | 'copy';
@@ -68,8 +68,17 @@ function isPathSafe(basePath: string, targetPath: string): boolean {
 }
 
 export function getCanonicalSkillsDir(global: boolean, cwd?: string): string {
+  return getCanonicalResourceDir(global, cwd, 'skill');
+}
+
+export function getCanonicalResourceDir(
+  global: boolean,
+  cwd?: string,
+  resourceType: ResourceType = 'skill'
+): string {
   const baseDir = global ? homedir() : cwd || process.cwd();
-  return join(baseDir, AGENTS_DIR, SKILLS_SUBDIR);
+  const subdir = resourceType === 'skill' ? SKILLS_SUBDIR : RULES_SUBDIR;
+  return join(baseDir, AGENTS_DIR, subdir);
 }
 
 /**
@@ -77,23 +86,29 @@ export function getCanonicalSkillsDir(global: boolean, cwd?: string): string {
  * Universal agents always use the canonical directory, which prevents
  * redundant symlinks and double-listing of skills.
  */
-export function getAgentBaseDir(agentType: AgentType, global: boolean, cwd?: string): string {
+export function getAgentBaseDir(
+  agentType: AgentType,
+  global: boolean,
+  cwd?: string,
+  resourceType: ResourceType = 'skill'
+): string {
   if (isUniversalAgent(agentType)) {
-    return getCanonicalSkillsDir(global, cwd);
+    return getCanonicalResourceDir(global, cwd, resourceType);
   }
 
   const agent = agents[agentType];
   const baseDir = global ? homedir() : cwd || process.cwd();
+  const resourceConfig = agent.resources[resourceType];
 
   if (global) {
-    if (agent.globalSkillsDir === undefined) {
+    if (resourceConfig.globalDir === undefined) {
       // This should be caught by callers checking support
-      return join(baseDir, agent.skillsDir);
+      return join(baseDir, resourceConfig.projectDir);
     }
-    return agent.globalSkillsDir;
+    return resourceConfig.globalDir;
   }
 
-  return join(baseDir, agent.skillsDir);
+  return join(baseDir, resourceConfig.projectDir);
 }
 
 function resolveSymlinkTarget(linkPath: string, linkTarget: string): string {
@@ -390,8 +405,8 @@ export async function isSkillInstalled(
   }
 
   const targetBase = options.global
-    ? agent.globalSkillsDir!
-    : join(options.cwd || process.cwd(), agent.skillsDir);
+    ? getAgentBaseDir(agentType, true, options.cwd, 'skill')
+    : getAgentBaseDir(agentType, false, options.cwd, 'skill');
 
   const skillDir = join(targetBase, sanitized);
 
@@ -416,7 +431,7 @@ export function getInstallPath(
   const cwd = options.cwd || process.cwd();
   const sanitized = sanitizeName(skillName);
 
-  const targetBase = getAgentBaseDir(agentType, options.global ?? false, options.cwd);
+  const targetBase = getAgentBaseDir(agentType, options.global ?? false, options.cwd, 'skill');
   const installPath = join(targetBase, sanitized);
 
   if (!isPathSafe(targetBase, installPath)) {

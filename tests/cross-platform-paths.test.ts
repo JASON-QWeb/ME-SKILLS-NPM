@@ -6,7 +6,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { sep } from 'path';
+import { join, sep } from 'path';
+import { agents } from '../src/agents.ts';
+import { getAgentBaseDir } from '../src/installer.ts';
 
 /**
  * Simulates the shortenPath function from add.ts (cross-platform version)
@@ -260,5 +262,18 @@ describe('platform detection', () => {
   it('sep is correct for current platform', () => {
     // This will be '/' on Unix/Mac and '\\' on Windows
     expect(['/', '\\']).toContain(sep);
+  });
+});
+
+describe('resource-aware target metadata', () => {
+  it('exposes cline-me resource directories', () => {
+    expect(agents['cline-me'].resources.skill.projectDir).toBe('.cline/skills');
+    expect(agents['cline-me'].resources.rule.projectDir).toBe('.clinerules');
+  });
+
+  it('resolves project paths per resource type', () => {
+    const cwd = '/tmp/project';
+    expect(getAgentBaseDir('cline-me', false, cwd, 'skill')).toBe(join(cwd, '.cline/skills'));
+    expect(getAgentBaseDir('cline-me', false, cwd, 'rule')).toBe(join(cwd, '.clinerules'));
   });
 });
