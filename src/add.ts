@@ -1875,6 +1875,18 @@ async function handleRuleInstallation(
       process.exit(1);
     }
 
+    const unsupportedAgents = options.agent.filter(
+      (agent) => !ruleAgents.includes(agent as AgentType)
+    );
+    if (unsupportedAgents.length > 0) {
+      p.log.error(`Unsupported agents for rule installation: ${unsupportedAgents.join(', ')}`);
+      p.log.info(
+        `Supported agents: ${ruleAgents.map((agent) => agents[agent].displayName).join(', ')}`
+      );
+      await cleanup(tempDir);
+      process.exit(1);
+    }
+
     targetAgents = options.agent as AgentType[];
   } else if (ruleAgents.length === 1 || options.yes) {
     targetAgents = ruleAgents;

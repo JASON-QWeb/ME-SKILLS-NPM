@@ -21,7 +21,7 @@ function ruleDescriptionFromContent(content: string, fallback: string): string {
 
 export async function discoverRules(basePath: string, subpath?: string): Promise<Rule[]> {
   const searchPath = subpath ? join(basePath, subpath) : basePath;
-  const rulesDir = join(searchPath, 'rules');
+  const rulesDir = basename(searchPath) === 'rules' ? searchPath : join(searchPath, 'rules');
 
   if (!isRulePathSafe(searchPath, rulesDir)) {
     throw new Error(

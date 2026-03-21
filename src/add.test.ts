@@ -141,6 +141,23 @@ description: Test
     expect(result.exitCode).toBe(1);
   });
 
+  it('should reject unsupported agents for rule installation', () => {
+    const rulesDir = join(testDir, 'rules');
+    mkdirSync(rulesDir, { recursive: true });
+    writeFileSync(
+      join(rulesDir, 'react.md'),
+      `# React Rule
+
+Use React carefully.
+`
+    );
+
+    const result = runCli(['add', testDir, '--rule', '-y', '--agent', 'claude-code'], testDir);
+    expect(result.stdout).toContain('Unsupported agents for rule installation');
+    expect(result.stdout).toContain('claude-code');
+    expect(result.exitCode).toBe(1);
+  });
+
   it('should support add command aliases (a, i, install)', () => {
     // Test that aliases work (just check they show missing source error)
     const resultA = runCli(['a'], testDir);

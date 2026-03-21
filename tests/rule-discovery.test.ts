@@ -35,4 +35,17 @@ describe('discoverRules', () => {
       join(root, 'rules', 'react.md'),
     ]);
   });
+
+  it('discovers markdown rules when the source already points at rules/', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'skillshub-rules-subpath-'));
+    createdDirs.push(root);
+
+    await mkdir(join(root, 'rules'), { recursive: true });
+    await writeFile(join(root, 'rules', 'react.md'), '# React\nReact rule body\n', 'utf-8');
+
+    const rules = await discoverRules(root, 'rules');
+
+    expect(rules.map((rule) => rule.name)).toEqual(['react']);
+    expect(rules[0]?.path).toBe(join(root, 'rules', 'react.md'));
+  });
 });
