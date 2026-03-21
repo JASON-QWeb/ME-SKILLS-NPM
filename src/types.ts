@@ -68,7 +68,7 @@ export interface AgentConfig {
   skillsDir: string;
   /** Global skills directory. Set to undefined if the agent doesn't support global installation. */
   globalSkillsDir: string | undefined;
-  resources: Record<ResourceType, AgentResourceConfig>;
+  resources: Partial<Record<ResourceType, AgentResourceConfig>>;
   detectInstalled: () => Promise<boolean>;
   /** Whether to show this agent in the universal agents list. Defaults to true. */
   showInUniversalList?: boolean;

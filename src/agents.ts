@@ -26,7 +26,7 @@ export function getOpenClawGlobalSkillsDir(
   return join(homeDir, '.openclaw/skills');
 }
 
-function withResourceDefaults(
+function withSkillResourceDefaults(
   config: Omit<AgentConfig, 'resources'>,
   overrides?: Partial<AgentConfig['resources']>
 ): AgentConfig {
@@ -34,10 +34,6 @@ function withResourceDefaults(
     ...config,
     resources: {
       skill: {
-        projectDir: config.skillsDir,
-        globalDir: config.globalSkillsDir,
-      },
-      rule: {
         projectDir: config.skillsDir,
         globalDir: config.globalSkillsDir,
       },
@@ -454,7 +450,7 @@ export const agents: Record<AgentType, AgentConfig> = Object.fromEntries(
     if (type === 'cline-me') {
       return [
         type,
-        withResourceDefaults(config, {
+        withSkillResourceDefaults(config, {
           rule: {
             projectDir: '.clinerules',
             globalDir: join(home, '.clinerules'),
@@ -463,7 +459,7 @@ export const agents: Record<AgentType, AgentConfig> = Object.fromEntries(
       ];
     }
 
-    return [type, withResourceDefaults(config)];
+    return [type, withSkillResourceDefaults(config)];
   })
 ) as Record<AgentType, AgentConfig>;
 

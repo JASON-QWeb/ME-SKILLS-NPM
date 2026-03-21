@@ -92,13 +92,17 @@ export function getAgentBaseDir(
   cwd?: string,
   resourceType: ResourceType = 'skill'
 ): string {
-  if (isUniversalAgent(agentType)) {
+  if (resourceType === 'skill' && isUniversalAgent(agentType)) {
     return getCanonicalResourceDir(global, cwd, resourceType);
   }
 
   const agent = agents[agentType];
   const baseDir = global ? homedir() : cwd || process.cwd();
   const resourceConfig = agent.resources[resourceType];
+
+  if (!resourceConfig) {
+    throw new Error(`${agent.displayName} does not support ${resourceType} installation`);
+  }
 
   if (global) {
     if (resourceConfig.globalDir === undefined) {

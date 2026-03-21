@@ -271,9 +271,17 @@ describe('resource-aware target metadata', () => {
     expect(agents['cline-me'].resources.rule.projectDir).toBe('.clinerules');
   });
 
+  it('does not expose rule directories for existing agents', () => {
+    expect(agents.amp.resources.rule).toBeUndefined();
+    expect(agents.cursor.resources.rule).toBeUndefined();
+  });
+
   it('resolves project paths per resource type', () => {
     const cwd = '/tmp/project';
     expect(getAgentBaseDir('cline-me', false, cwd, 'skill')).toBe(join(cwd, '.cline/skills'));
     expect(getAgentBaseDir('cline-me', false, cwd, 'rule')).toBe(join(cwd, '.clinerules'));
+    expect(() => getAgentBaseDir('amp', false, cwd, 'rule')).toThrow(
+      /does not support rule installation/
+    );
   });
 });
