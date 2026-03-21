@@ -62,6 +62,13 @@ export interface Skill {
   metadata?: Record<string, unknown>;
 }
 
+export interface Rule {
+  name: string;
+  description: string;
+  path: string;
+  content: string;
+}
+
 export interface AgentConfig {
   name: string;
   displayName: string;

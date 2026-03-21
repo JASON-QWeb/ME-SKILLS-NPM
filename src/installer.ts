@@ -14,7 +14,7 @@ import {
 import { existsSync } from 'fs';
 import { join, basename, normalize, resolve, sep, relative, dirname } from 'path';
 import { homedir, platform } from 'os';
-import type { Skill, AgentType, RemoteSkill, ResourceType } from './types.ts';
+import type { Skill, Rule, AgentType, RemoteSkill, ResourceType } from './types.ts';
 import type { WellKnownSkill } from './providers/wellknown.ts';
 import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
 import { AGENTS_DIR, RULES_SUBDIR, SKILLS_SUBDIR } from './constants.ts';
@@ -335,6 +335,62 @@ export async function installSkillForAgent(
     return {
       success: false,
       path: agentDir,
+      mode: installMode,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+export function getRuleInstallPath(
+  ruleName: string,
+  agentType: AgentType,
+  options: { global?: boolean; cwd?: string } = {}
+): string {
+  const sanitized = sanitizeName(ruleName);
+  const targetBase = getAgentBaseDir(agentType, options.global ?? false, options.cwd, 'rule');
+  const installPath = join(targetBase, `${sanitized}.md`);
+
+  if (!isPathSafe(targetBase, installPath)) {
+    throw new Error('Invalid rule name: potential path traversal detected');
+  }
+
+  return installPath;
+}
+
+export async function installRuleForAgent(
+  rule: Rule,
+  agentType: AgentType,
+  options: { global?: boolean; cwd?: string; mode?: InstallMode } = {}
+): Promise<InstallResult> {
+  const agent = agents[agentType];
+  const isGlobal = options.global ?? false;
+  const cwd = options.cwd || process.cwd();
+  const installMode = options.mode ?? 'copy';
+
+  if (isGlobal && agent.resources.rule?.globalDir === undefined) {
+    return {
+      success: false,
+      path: '',
+      mode: installMode,
+      error: `${agent.displayName} does not support global rule installation`,
+    };
+  }
+
+  const installPath = getRuleInstallPath(rule.name, agentType, { global: isGlobal, cwd });
+
+  try {
+    await mkdir(dirname(installPath), { recursive: true });
+    await writeFile(installPath, rule.content, 'utf-8');
+
+    return {
+      success: true,
+      path: installPath,
+      mode: installMode,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      path: installPath,
       mode: installMode,
       error: error instanceof Error ? error.message : 'Unknown error',
     };

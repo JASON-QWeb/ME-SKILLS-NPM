@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import { sep } from 'path';
 import { parseSource, getOwnerRepo, parseOwnerRepo, isRepoPrivate } from './source-parser.ts';
 import { searchMultiselect } from './prompts/search-multiselect.ts';
+import { discoverRules } from './rules.ts';
 
 // Helper to check if a value is a cancel symbol (works with both clack and our custom prompts)
 const isCancelled = (value: unknown): value is symbol => typeof value === 'symbol';
@@ -28,6 +29,7 @@ import {
   isSkillInstalled,
   getCanonicalPath,
   installWellKnownSkillForAgent,
+  installRuleForAgent,
   type InstallMode,
 } from './installer.ts';
 import {
@@ -55,7 +57,7 @@ import {
   saveSelectedAgents,
 } from './skill-lock.ts';
 import { addSkillToLocalLock, computeSkillFolderHash } from './local-lock.ts';
-import type { Skill, AgentType } from './types.ts';
+import type { Skill, Rule, AgentType } from './types.ts';
 import packageJson from '../package.json' with { type: 'json' };
 export function initTelemetry(version: string): void {
   setVersion(version);
@@ -412,6 +414,7 @@ export interface AddOptions {
   agent?: string[];
   yes?: boolean;
   skill?: string[];
+  rule?: boolean;
   list?: boolean;
   all?: boolean;
   fullDepth?: boolean;
@@ -957,6 +960,11 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       tempDir = await cloneRepo(parsed.url, parsed.ref);
       skillsDir = tempDir;
       spinner.stop('Repository cloned');
+    }
+
+    if (options.rule) {
+      await handleRuleInstallation(source, skillsDir, parsed, options, spinner, tempDir);
+      return;
     }
 
     // If skillFilter is present from @skill syntax (e.g., owner/repo@skill-name),
@@ -1759,6 +1767,237 @@ async function promptForFindSkills(
   }
 }
 
+async function handleRuleInstallation(
+  source: string,
+  rulesDir: string,
+  parsed: ReturnType<typeof parseSource>,
+  options: AddOptions,
+  spinner: ReturnType<typeof p.spinner>,
+  tempDir: string | null
+): Promise<void> {
+  spinner.start('Discovering rules...');
+  const rules = await discoverRules(rulesDir, parsed.subpath);
+
+  if (rules.length === 0) {
+    spinner.stop(pc.red('No rules found'));
+    p.outro(pc.red('No valid rules found. Rules require markdown files in a rules/ directory.'));
+    await cleanup(tempDir);
+    process.exit(1);
+  }
+
+  spinner.stop(`Found ${pc.green(rules.length)} rule${rules.length > 1 ? 's' : ''}`);
+
+  if (options.list) {
+    console.log();
+    p.log.step(pc.bold('Available Rules'));
+    for (const rule of rules) {
+      p.log.message(`  ${pc.cyan(rule.name)}`);
+      p.log.message(`    ${pc.dim(rule.description)}`);
+    }
+    console.log();
+    p.outro('Run without --list to install');
+    await cleanup(tempDir);
+    process.exit(0);
+  }
+
+  let selectedRules: Rule[];
+
+  if (options.skill?.includes('*')) {
+    selectedRules = rules;
+    p.log.info(`Installing all ${rules.length} rules`);
+  } else if (options.skill && options.skill.length > 0) {
+    const selected = rules.filter((rule) => options.skill!.includes(rule.name));
+    if (selected.length === 0) {
+      p.log.error(`No matching rules found for: ${options.skill.join(', ')}`);
+      p.log.info('Available rules:');
+      for (const rule of rules) {
+        p.log.message(`  - ${rule.name}`);
+      }
+      await cleanup(tempDir);
+      process.exit(1);
+    }
+
+    selectedRules = selected;
+    p.log.info(
+      `Selected ${selectedRules.length} rule${selectedRules.length !== 1 ? 's' : ''}: ${selectedRules.map((rule) => pc.cyan(rule.name)).join(', ')}`
+    );
+  } else if (rules.length === 1 || options.yes) {
+    selectedRules = rules;
+    if (rules.length === 1) {
+      p.log.info(`Rule: ${pc.cyan(rules[0]!.name)}`);
+      p.log.message(pc.dim(rules[0]!.description));
+    } else {
+      p.log.info(`Installing all ${rules.length} rules`);
+    }
+  } else {
+    const ruleChoices = rules.map((rule) => ({
+      value: rule,
+      label: rule.name,
+      hint: rule.description.length > 60 ? rule.description.slice(0, 57) + '...' : rule.description,
+    }));
+
+    const selected = await multiselect({
+      message: 'Select rules to install',
+      options: ruleChoices,
+      required: true,
+    });
+
+    if (p.isCancel(selected)) {
+      p.cancel('Installation cancelled');
+      await cleanup(tempDir);
+      process.exit(0);
+    }
+
+    selectedRules = selected as Rule[];
+  }
+
+  const validAgents = Object.keys(agents) as AgentType[];
+  const ruleAgents = validAgents.filter((agentType) => agents[agentType].resources.rule);
+
+  if (ruleAgents.length === 0) {
+    p.log.error('No agents support rule installation');
+    await cleanup(tempDir);
+    process.exit(1);
+  }
+
+  let targetAgents: AgentType[];
+  if (options.agent?.includes('*')) {
+    targetAgents = ruleAgents;
+    p.log.info(`Installing rules to all ${targetAgents.length} supported agents`);
+  } else if (options.agent && options.agent.length > 0) {
+    const invalidAgents = options.agent.filter(
+      (agent) => !validAgents.includes(agent as AgentType)
+    );
+    if (invalidAgents.length > 0) {
+      p.log.error(`Invalid agents: ${invalidAgents.join(', ')}`);
+      p.log.info(`Valid agents: ${validAgents.join(', ')}`);
+      await cleanup(tempDir);
+      process.exit(1);
+    }
+
+    targetAgents = options.agent as AgentType[];
+  } else if (ruleAgents.length === 1 || options.yes) {
+    targetAgents = ruleAgents;
+    p.log.info(
+      `Installing rules to: ${ruleAgents.map((agent) => pc.cyan(agents[agent].displayName)).join(', ')}`
+    );
+  } else {
+    const allAgentChoices = ruleAgents.map((agentType) => ({
+      value: agentType,
+      label: agents[agentType].displayName,
+    }));
+
+    const selected = await promptForAgents(
+      'Which agents do you want to install rules to?',
+      allAgentChoices
+    );
+    if (p.isCancel(selected)) {
+      p.cancel('Installation cancelled');
+      await cleanup(tempDir);
+      process.exit(0);
+    }
+    targetAgents = selected as AgentType[];
+  }
+
+  let installGlobally = options.global ?? false;
+  const supportsGlobal = targetAgents.some((agent) => agents[agent].resources.rule?.globalDir);
+
+  if (options.global === undefined && !options.yes && supportsGlobal) {
+    const scope = await p.select({
+      message: 'Installation scope',
+      options: [
+        {
+          value: false,
+          label: 'Project',
+          hint: 'Install in current directory (committed with your project)',
+        },
+        {
+          value: true,
+          label: 'Global',
+          hint: 'Install in home directory (available across all projects)',
+        },
+      ],
+    });
+
+    if (p.isCancel(scope)) {
+      p.cancel('Installation cancelled');
+      await cleanup(tempDir);
+      process.exit(0);
+    }
+
+    installGlobally = scope as boolean;
+  }
+
+  const cwd = process.cwd();
+  const summaryLines: string[] = [];
+  summaryLines.push(
+    pc.cyan(`${selectedRules.length} rule${selectedRules.length !== 1 ? 's' : ''}`)
+  );
+  summaryLines.push(
+    `  ${pc.dim('targets:')} ${targetAgents.map((agent) => agents[agent].displayName).join(', ')}`
+  );
+  summaryLines.push(`  ${pc.dim('scope:')} ${installGlobally ? 'global' : 'project'}`);
+
+  console.log();
+  p.note(summaryLines.join('\n'), 'Rule Installation Summary');
+
+  if (!options.yes) {
+    const confirmed = await p.confirm({ message: 'Proceed with installation?' });
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.cancel('Installation cancelled');
+      await cleanup(tempDir);
+      process.exit(0);
+    }
+  }
+
+  spinner.start('Installing rules...');
+  const results: Array<{
+    rule: string;
+    agent: string;
+    success: boolean;
+    path: string;
+    error?: string;
+  }> = [];
+
+  for (const rule of selectedRules) {
+    for (const agent of targetAgents) {
+      const result = await installRuleForAgent(rule, agent, { global: installGlobally, cwd });
+      results.push({ rule: rule.name, agent: agents[agent].displayName, ...result });
+    }
+  }
+
+  spinner.stop('Installation complete');
+
+  const successful = results.filter((result) => result.success);
+  const failed = results.filter((result) => !result.success);
+
+  if (successful.length > 0) {
+    const installedNames = Array.from(new Set(successful.map((result) => result.rule)));
+    p.note(
+      installedNames.map((name) => `${pc.green('✓')} ${name}`).join('\n'),
+      pc.green(`Installed ${installedNames.length} rule${installedNames.length !== 1 ? 's' : ''}`)
+    );
+  }
+
+  if (failed.length > 0) {
+    console.log();
+    p.log.error(pc.red(`Failed to install ${failed.length}`));
+    for (const result of failed) {
+      p.log.message(
+        `  ${pc.red('✗')} ${result.rule} → ${result.agent}: ${pc.dim(result.error ?? 'Unknown error')}`
+      );
+    }
+  }
+
+  console.log();
+  p.outro(
+    pc.green('Done!') + pc.dim('  Review rules before use; they run with full agent permissions.')
+  );
+
+  await cleanup(tempDir);
+  process.exit(0);
+}
+
 // Parse command line options from args array
 export function parseAddOptions(args: string[]): { source: string[]; options: AddOptions } {
   const options: AddOptions = {};
@@ -1775,6 +2014,8 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.list = true;
     } else if (arg === '--all') {
       options.all = true;
+    } else if (arg === '--rule') {
+      options.rule = true;
     } else if (arg === '-a' || arg === '--agent') {
       options.agent = options.agent || [];
       i++;
