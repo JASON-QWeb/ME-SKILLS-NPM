@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { xdgConfig } from 'xdg-basedir';
-import type { AgentConfig, AgentType } from './types.ts';
+import type { AgentConfig, AgentType, ResourceType } from './types.ts';
 
 const home = homedir();
 // Use xdg-basedir (not env-paths) to match OpenCode/Amp/Goose behavior on all platforms.
@@ -505,4 +505,10 @@ export function getNonUniversalAgents(): AgentType[] {
  */
 export function isUniversalAgent(type: AgentType): boolean {
   return agents[type].skillsDir === '.agents/skills';
+}
+
+export function getAgentsSupportingResource(resourceType: ResourceType): AgentType[] {
+  return (Object.entries(agents) as [AgentType, AgentConfig][])
+    .filter(([_, config]) => config.resources[resourceType] !== undefined)
+    .map(([type]) => type);
 }

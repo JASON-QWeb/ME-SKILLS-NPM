@@ -71,6 +71,9 @@ function showBanner(): void {
     `  ${DIM}$${RESET} ${TEXT}npx skillshub add ${DIM}<package>${RESET}        ${DIM}Add a new skill${RESET}`
   );
   console.log(
+    `  ${DIM}$${RESET} ${TEXT}npx skillshub add https://github.com/org/repo --rule${RESET} ${DIM}Add a rule${RESET}`
+  );
+  console.log(
     `  ${DIM}$${RESET} ${TEXT}npx skillshub remove${RESET}               ${DIM}Remove installed skills${RESET}`
   );
   console.log(
@@ -130,6 +133,7 @@ ${BOLD}Add Options:${RESET}
   -g, --global           Install skill globally (user-level) instead of project-level
   -a, --agent <agents>   Specify agents to install to (use '*' for all agents)
   -s, --skill <skills>   Specify skill names to install (use '*' for all skills)
+  --rule                 Install or operate on rule resources
   -l, --list             List available skills in the repository without installing
   -y, --yes              Skip confirmation prompts
   --copy                 Copy files instead of symlinking to agent directories
@@ -140,6 +144,7 @@ ${BOLD}Remove Options:${RESET}
   -g, --global           Remove from global scope
   -a, --agent <agents>   Remove from specific agents (use '*' for all agents)
   -s, --skill <skills>   Specify skills to remove (use '*' for all skills)
+  --rule                 Operate on rule resources
   -y, --yes              Skip confirmation prompts
   --all                  Shorthand for --skill '*' --agent '*' -y
   
@@ -150,6 +155,8 @@ ${BOLD}Experimental Sync Options:${RESET}
 ${BOLD}List Options:${RESET}
   -g, --global           List global skills (default: project)
   -a, --agent <agents>   Filter by specific agents
+  -s, --skill            List skill resources
+  --rule                 List rule resources
   --json                 Output as JSON (machine-readable, no ANSI codes)
 
 ${BOLD}Options:${RESET}

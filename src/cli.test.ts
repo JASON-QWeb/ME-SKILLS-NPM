@@ -18,6 +18,7 @@ describe('skillshub CLI', () => {
       expect(output).toContain('-g, --global');
       expect(output).toContain('-a, --agent');
       expect(output).toContain('-s, --skill');
+      expect(output).toContain('--rule');
       expect(output).toContain('-l, --list');
       expect(output).toContain('-y, --yes');
       expect(output).toContain('--all');
@@ -57,6 +58,7 @@ describe('skillshub CLI', () => {
       const output = stripLogo(runCliOutput([]));
       expect(output).toContain('SkillsHub');
       expect(output).toContain('npx skillshub add');
+      expect(output).toContain('npx skillshub add https://github.com/org/repo --rule');
       expect(output).toContain('npx skillshub check');
       expect(output).toContain('npx skillshub update');
       expect(output).toContain('npx skillshub init');

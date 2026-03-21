@@ -1,5 +1,5 @@
 import { homedir } from 'os';
-import type { AgentType } from './types.ts';
+import type { AgentType, ResourceType } from './types.ts';
 import { agents } from './agents.ts';
 import { listInstalledSkills, type InstalledSkill } from './installer.ts';
 import { getAllLockedSkills } from './skill-lock.ts';
@@ -15,6 +15,7 @@ interface ListOptions {
   global?: boolean;
   agent?: string[];
   json?: boolean;
+  resourceType?: ResourceType;
 }
 
 /**
@@ -52,6 +53,10 @@ export function parseListOptions(args: string[]): ListOptions {
       options.global = true;
     } else if (arg === '--json') {
       options.json = true;
+    } else if (arg === '--rule') {
+      options.resourceType = 'rule';
+    } else if (arg === '-s' || arg === '--skill') {
+      options.resourceType = 'skill';
     } else if (arg === '-a' || arg === '--agent') {
       options.agent = options.agent || [];
       // Collect all following arguments until next flag
@@ -66,6 +71,7 @@ export function parseListOptions(args: string[]): ListOptions {
 
 export async function runList(args: string[]): Promise<void> {
   const options = parseListOptions(args);
+  const resourceType = options.resourceType ?? 'skill';
 
   // Default to project only (local), use -g for global
   const scope = options.global === true ? true : false;
@@ -88,6 +94,7 @@ export async function runList(args: string[]): Promise<void> {
   const installedSkills = await listInstalledSkills({
     global: scope,
     agentFilter,
+    resourceType,
   });
 
   // JSON output mode: structured, no ANSI, untruncated agent lists
@@ -113,11 +120,12 @@ export async function runList(args: string[]): Promise<void> {
       console.log('[]');
       return;
     }
-    console.log(`${DIM}No ${scopeLabel.toLowerCase()} skills found.${RESET}`);
+    const resourceLabel = resourceType === 'skill' ? 'skills' : 'rules';
+    console.log(`${DIM}No ${scopeLabel.toLowerCase()} ${resourceLabel} found.${RESET}`);
     if (scope) {
-      console.log(`${DIM}Try listing project skills without -g${RESET}`);
+      console.log(`${DIM}Try listing project ${resourceLabel} without -g${RESET}`);
     } else {
-      console.log(`${DIM}Try listing global skills with -g${RESET}`);
+      console.log(`${DIM}Try listing global ${resourceLabel} with -g${RESET}`);
     }
     return;
   }
@@ -132,7 +140,7 @@ export async function runList(args: string[]): Promise<void> {
     console.log(`${prefix}  ${DIM}Agents:${RESET} ${agentInfo}`);
   }
 
-  console.log(`${BOLD}${scopeLabel} Skills${RESET}`);
+  console.log(`${BOLD}${scopeLabel} ${resourceType === 'skill' ? 'Skills' : 'Rules'}${RESET}`);
   console.log();
 
   // Group skills by plugin

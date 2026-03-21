@@ -16,7 +16,12 @@ import { join, basename, normalize, resolve, sep, relative, dirname } from 'path
 import { homedir, platform } from 'os';
 import type { Skill, Rule, AgentType, RemoteSkill, ResourceType } from './types.ts';
 import type { WellKnownSkill } from './providers/wellknown.ts';
-import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
+import {
+  agents,
+  detectInstalledAgents,
+  getAgentsSupportingResource,
+  isUniversalAgent,
+} from './agents.ts';
 import { AGENTS_DIR, RULES_SUBDIR, SKILLS_SUBDIR } from './constants.ts';
 import { parseSkillMd } from './skills.ts';
 
@@ -485,17 +490,18 @@ export async function isSkillInstalled(
 export function getInstallPath(
   skillName: string,
   agentType: AgentType,
-  options: { global?: boolean; cwd?: string } = {}
+  options: { global?: boolean; cwd?: string; resourceType?: ResourceType } = {}
 ): string {
-  const agent = agents[agentType];
   const cwd = options.cwd || process.cwd();
   const sanitized = sanitizeName(skillName);
+  const resourceType = options.resourceType ?? 'skill';
 
-  const targetBase = getAgentBaseDir(agentType, options.global ?? false, options.cwd, 'skill');
-  const installPath = join(targetBase, sanitized);
+  const targetBase = getAgentBaseDir(agentType, options.global ?? false, options.cwd, resourceType);
+  const installPath =
+    resourceType === 'rule' ? join(targetBase, `${sanitized}.md`) : join(targetBase, sanitized);
 
   if (!isPathSafe(targetBase, installPath)) {
-    throw new Error('Invalid skill name: potential path traversal detected');
+    throw new Error(`Invalid ${resourceType} name: potential path traversal detected`);
   }
 
   return installPath;
@@ -506,14 +512,18 @@ export function getInstallPath(
  */
 export function getCanonicalPath(
   skillName: string,
-  options: { global?: boolean; cwd?: string } = {}
+  options: { global?: boolean; cwd?: string; resourceType?: ResourceType } = {}
 ): string {
   const sanitized = sanitizeName(skillName);
-  const canonicalBase = getCanonicalSkillsDir(options.global ?? false, options.cwd);
-  const canonicalPath = join(canonicalBase, sanitized);
+  const resourceType = options.resourceType ?? 'skill';
+  const canonicalBase = getCanonicalResourceDir(options.global ?? false, options.cwd, resourceType);
+  const canonicalPath =
+    resourceType === 'rule'
+      ? join(canonicalBase, `${sanitized}.md`)
+      : join(canonicalBase, sanitized);
 
   if (!isPathSafe(canonicalBase, canonicalPath)) {
-    throw new Error('Invalid skill name: potential path traversal detected');
+    throw new Error(`Invalid ${resourceType} name: potential path traversal detected`);
   }
 
   return canonicalPath;
@@ -793,8 +803,13 @@ export async function listInstalledSkills(
     global?: boolean;
     cwd?: string;
     agentFilter?: AgentType[];
+    resourceType?: ResourceType;
   } = {}
 ): Promise<InstalledSkill[]> {
+  if ((options.resourceType ?? 'skill') === 'rule') {
+    return listInstalledRules(options);
+  }
+
   const cwd = options.cwd || process.cwd();
   // Use a Map to deduplicate skills by scope:name
   const skillsMap: Map<string, InstalledSkill> = new Map();
@@ -1014,4 +1029,144 @@ export async function listInstalledSkills(
   }
 
   return Array.from(skillsMap.values());
+}
+
+async function listInstalledRules(
+  options: {
+    global?: boolean;
+    cwd?: string;
+    agentFilter?: AgentType[];
+    resourceType?: ResourceType;
+  } = {}
+): Promise<InstalledSkill[]> {
+  const cwd = options.cwd || process.cwd();
+  const skillsMap: Map<string, InstalledSkill> = new Map();
+  const agentFilter = options.agentFilter;
+  const supportedAgents = getAgentsSupportingResource('rule');
+  const agentsToCheck = agentFilter
+    ? supportedAgents.filter((a) => agentFilter.includes(a))
+    : supportedAgents;
+
+  const scopeTypes: Array<{ global: boolean }> = [];
+  if (options.global === undefined) {
+    scopeTypes.push({ global: false }, { global: true });
+  } else {
+    scopeTypes.push({ global: options.global });
+  }
+
+  const scopes: Array<{ global: boolean; path: string; agentType?: AgentType }> = [];
+
+  for (const { global: isGlobal } of scopeTypes) {
+    for (const agentType of agentsToCheck) {
+      const agent = agents[agentType];
+      if (isGlobal && agent.resources.rule?.globalDir === undefined) {
+        continue;
+      }
+
+      const resourceConfig = agent.resources.rule;
+      if (!resourceConfig) continue;
+      const agentDir = isGlobal ? resourceConfig.globalDir : join(cwd, resourceConfig.projectDir);
+      if (!agentDir) continue;
+      if (!scopes.some((s) => s.path === agentDir && s.global === isGlobal)) {
+        scopes.push({ global: isGlobal, path: agentDir, agentType });
+      }
+    }
+  }
+
+  for (const scope of scopes) {
+    try {
+      const entries = await readdir(scope.path, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.endsWith('.md')) {
+          continue;
+        }
+
+        const rulePath = join(scope.path, entry.name);
+        const name = entry.name.replace(/\.md$/, '');
+        const ruleKey = `${scope.global ? 'global' : 'project'}:${name}`;
+        const description = entry.name.replace(/\.md$/, '');
+
+        if (scope.agentType) {
+          if (skillsMap.has(ruleKey)) {
+            const existing = skillsMap.get(ruleKey)!;
+            if (!existing.agents.includes(scope.agentType)) {
+              existing.agents.push(scope.agentType);
+            }
+          } else {
+            skillsMap.set(ruleKey, {
+              name,
+              description,
+              path: rulePath,
+              canonicalPath: rulePath,
+              scope: scope.global ? 'global' : 'project',
+              agents: [scope.agentType],
+            });
+          }
+          continue;
+        }
+
+        const sanitizedRuleName = sanitizeName(name);
+        const installedAgents: AgentType[] = [];
+
+        for (const agentType of agentsToCheck) {
+          const agent = agents[agentType];
+          if (scope.global && agent.resources.rule?.globalDir === undefined) {
+            continue;
+          }
+
+          const agentBase = getAgentBaseDir(agentType, scope.global, cwd, 'rule');
+          const possibleNames = Array.from(
+            new Set([
+              entry.name,
+              `${sanitizedRuleName}.md`,
+              `${name.toLowerCase().replace(/\s+/g, '-')}.md`,
+            ])
+          );
+
+          let found = false;
+          for (const possibleName of possibleNames) {
+            const agentRulePath = join(agentBase, possibleName);
+            if (!isPathSafe(agentBase, agentRulePath)) continue;
+
+            try {
+              await access(agentRulePath);
+              found = true;
+              break;
+            } catch {
+              // try next
+            }
+          }
+
+          if (found) {
+            installedAgents.push(agentType);
+          }
+        }
+
+        const scopeKey = scope.global ? 'global' : 'project';
+        const ruleKeyWithPath = `${scopeKey}:${name}`;
+        if (skillsMap.has(ruleKeyWithPath)) {
+          const existing = skillsMap.get(ruleKeyWithPath)!;
+          for (const agentType of installedAgents) {
+            if (!existing.agents.includes(agentType)) {
+              existing.agents.push(agentType);
+            }
+          }
+        } else {
+          skillsMap.set(ruleKeyWithPath, {
+            name,
+            description,
+            path: rulePath,
+            canonicalPath: rulePath,
+            scope: scopeKey,
+            agents: installedAgents,
+          });
+        }
+      }
+    } catch {
+      // ignore missing dirs
+    }
+  }
+
+  return Array.from(skillsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 }

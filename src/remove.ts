@@ -2,13 +2,14 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { readdir, rm, lstat } from 'fs/promises';
 import { join } from 'path';
-import { agents, detectInstalledAgents } from './agents.ts';
+import { agents, detectInstalledAgents, getAgentsSupportingResource } from './agents.ts';
 import { track } from './telemetry.ts';
 import { removeSkillFromLock, getSkillFromLock } from './skill-lock.ts';
-import type { AgentType } from './types.ts';
+import type { AgentType, ResourceType } from './types.ts';
 import {
   getInstallPath,
   getCanonicalPath,
+  getCanonicalResourceDir,
   getCanonicalSkillsDir,
   sanitizeName,
 } from './installer.ts';
@@ -18,9 +19,165 @@ export interface RemoveOptions {
   agent?: string[];
   yes?: boolean;
   all?: boolean;
+  resourceType?: ResourceType;
+}
+
+async function removeRuleCommand(ruleNames: string[], options: RemoveOptions): Promise<void> {
+  const isGlobal = options.global ?? false;
+  const cwd = process.cwd();
+  const spinner = p.spinner();
+  const supportedAgents = getAgentsSupportingResource('rule');
+  const validAgents = Object.keys(agents);
+
+  spinner.start('Scanning for installed rules...');
+  const ruleNamesSet = new Set<string>();
+
+  const scanDir = async (dir: string) => {
+    try {
+      const entries = await readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.md')) {
+          ruleNamesSet.add(entry.name.replace(/\.md$/, ''));
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && (err as { code?: string }).code !== 'ENOENT') {
+        p.log.warn(`Could not scan directory ${dir}: ${err.message}`);
+      }
+    }
+  };
+
+  if (isGlobal) {
+    await scanDir(getCanonicalResourceDir(true, cwd, 'rule'));
+    for (const agent of supportedAgents) {
+      const globalDir = agents[agent].resources.rule?.globalDir;
+      if (globalDir) {
+        await scanDir(globalDir);
+      }
+    }
+  } else {
+    await scanDir(getCanonicalResourceDir(false, cwd, 'rule'));
+    for (const agent of supportedAgents) {
+      await scanDir(join(cwd, agents[agent].resources.rule!.projectDir));
+    }
+  }
+
+  const installedRules = Array.from(ruleNamesSet).sort();
+  spinner.stop(`Found ${installedRules.length} unique installed rule(s)`);
+
+  if (installedRules.length === 0) {
+    p.outro(pc.yellow('No rules found to remove.'));
+    return;
+  }
+
+  if (options.agent && options.agent.length > 0) {
+    const invalidAgents = options.agent.filter((agent) => !validAgents.includes(agent));
+    if (invalidAgents.length > 0) {
+      p.log.error(`Invalid agents: ${invalidAgents.join(', ')}`);
+      p.log.info(`Valid agents: ${validAgents.join(', ')}`);
+      process.exit(1);
+    }
+
+    const unsupportedAgents = options.agent.filter(
+      (agent) => !agents[agent as AgentType].resources.rule
+    );
+    if (unsupportedAgents.length > 0) {
+      p.log.error(`Unsupported agents for rule removal: ${unsupportedAgents.join(', ')}`);
+      p.log.info(`Supported agents: ${supportedAgents.join(', ')}`);
+      process.exit(1);
+    }
+  }
+
+  let selectedRules: string[] = [];
+  if (options.all) {
+    selectedRules = installedRules;
+  } else if (ruleNames.length > 0) {
+    selectedRules = installedRules.filter((rule) =>
+      ruleNames.some((name) => name.toLowerCase() === rule.toLowerCase())
+    );
+
+    if (selectedRules.length === 0) {
+      p.log.error(`No matching rules found for: ${ruleNames.join(', ')}`);
+      return;
+    }
+  } else {
+    const choices = installedRules.map((rule) => ({ value: rule, label: rule }));
+    const selected = await p.multiselect({
+      message: `Select rules to remove ${pc.dim('(space to toggle)')}`,
+      options: choices,
+      required: true,
+    });
+
+    if (p.isCancel(selected)) {
+      p.cancel('Removal cancelled');
+      process.exit(0);
+    }
+
+    selectedRules = selected as string[];
+  }
+
+  let targetAgents: AgentType[];
+  if (options.agent && options.agent.length > 0) {
+    targetAgents = options.agent as AgentType[];
+  } else {
+    targetAgents = supportedAgents;
+    spinner.stop(`Targeting ${targetAgents.length} potential agent(s)`);
+  }
+
+  if (!options.yes) {
+    console.log();
+    p.log.info('Rules to remove:');
+    for (const rule of selectedRules) {
+      p.log.message(`  ${pc.red('•')} ${rule}`);
+    }
+    console.log();
+
+    const confirmed = await p.confirm({
+      message: `Are you sure you want to uninstall ${selectedRules.length} rule(s)?`,
+    });
+
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.cancel('Removal cancelled');
+      process.exit(0);
+    }
+  }
+
+  spinner.start('Removing rules...');
+
+  let successCount = 0;
+  for (const ruleName of selectedRules) {
+    const canonicalPath = getCanonicalPath(ruleName, {
+      global: isGlobal,
+      cwd,
+      resourceType: 'rule',
+    });
+    await rm(canonicalPath, { force: true });
+
+    for (const agentKey of targetAgents) {
+      const installPath = getInstallPath(ruleName, agentKey, {
+        global: isGlobal,
+        cwd,
+        resourceType: 'rule',
+      });
+      await rm(installPath, { force: true });
+    }
+
+    successCount++;
+  }
+
+  spinner.stop('Removal process complete');
+  p.log.success(pc.green(`Successfully removed ${successCount} rule(s)`));
+  console.log();
+  p.outro(pc.green('Done!'));
 }
 
 export async function removeCommand(skillNames: string[], options: RemoveOptions) {
+  const resourceType = options.resourceType ?? 'skill';
+  if (resourceType === 'rule') {
+    await removeRuleCommand(skillNames, options);
+    return;
+  }
+
   const isGlobal = options.global ?? false;
   const cwd = process.cwd();
 
@@ -290,6 +447,10 @@ export function parseRemoveOptions(args: string[]): { skills: string[]; options:
       options.global = true;
     } else if (arg === '-y' || arg === '--yes') {
       options.yes = true;
+    } else if (arg === '--rule') {
+      options.resourceType = 'rule';
+    } else if (arg === '-s' || arg === '--skill') {
+      options.resourceType = 'skill';
     } else if (arg === '--all') {
       options.all = true;
     } else if (arg === '-a' || arg === '--agent') {
