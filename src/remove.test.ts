@@ -406,6 +406,7 @@ This is a test skill.
 
       const result = runCli(['remove', 'react', '--rule', '--global', '-y'], testDir, {
         HOME: globalHome,
+        USERPROFILE: globalHome,
         XDG_STATE_HOME: globalStateHome,
       });
 
