@@ -1,10 +1,10 @@
 {
-  "name": "skillshub",
-  "version": "1.0.1",
+  "name": "skillsandruless",
+  "version": "1.0.0",
   "description": "SkillsHub CLI for agent skills and rules",
   "type": "module",
   "bin": {
-    "skillshub": "./bin/cli.mjs"
+    "skillsandruless": "./bin/cli.mjs"
   },
   "files": [
     "dist",

@@ -11,37 +11,37 @@ Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [39 more](#av
 ## Install
 
 ```bash
-npx skillshub add owner/repo
+npx skillsandruless add owner/repo
 ```
 
 ## Commands
 
 ```bash
 # Add a skill
-npx skillshub add owner/repo
+npx skillsandruless add owner/repo
 
 # Add a rule
-npx skillshub add owner/repo --rule
+npx skillsandruless add owner/repo --rule
 
 # List installed skills / rules
-npx skillshub list
-npx skillshub list --rule
+npx skillsandruless list
+npx skillsandruless list --rule
 
 # Search skills
-npx skillshub find [keyword]
+npx skillsandruless find [keyword]
 
 # Remove
-npx skillshub remove skill-name
-npx skillshub remove --rule rule-name
+npx skillsandruless remove skill-name
+npx skillsandruless remove --rule rule-name
 
 # Check for updates
-npx skillshub check
+npx skillsandruless check
 
 # Update all
-npx skillshub update
+npx skillsandruless update
 
 # Create a new skill template
-npx skillshub init [name]
+npx skillsandruless init [name]
 ```
 
 ## Common Options
@@ -59,25 +59,25 @@ npx skillshub init [name]
 
 ```bash
 # Install specific skills from a repo
-npx skillshub add owner/repo --skill frontend-design --skill web-design
+npx skillsandruless add owner/repo --skill frontend-design --skill web-design
 
 # Install to a specific agent globally
-npx skillshub add owner/repo -g -a claude-code
+npx skillsandruless add owner/repo -g -a claude-code
 
 # Non-interactive (CI-friendly)
-npx skillshub add owner/repo --skill my-skill -a claude-code -y
+npx skillsandruless add owner/repo --skill my-skill -a claude-code -y
 
 # Remove all skills
-npx skillshub remove --all
+npx skillsandruless remove --all
 ```
 
 ## Source Formats
 
 ```bash
-npx skillshub add owner/repo                           # GitHub shorthand
-npx skillshub add https://github.com/owner/repo        # Full URL
-npx skillshub add https://gitlab.com/org/repo          # GitLab
-npx skillshub add ./local-path                          # Local directory
+npx skillsandruless add owner/repo                           # GitHub shorthand
+npx skillsandruless add https://github.com/owner/repo        # Full URL
+npx skillsandruless add https://gitlab.com/org/repo          # GitLab
+npx skillsandruless add ./local-path                          # Local directory
 ```
 
 ## What are Agent Skills?

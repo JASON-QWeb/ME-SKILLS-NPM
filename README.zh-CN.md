@@ -11,37 +11,37 @@
 ## 安装
 
 ```bash
-npx skillshub add owner/repo
+npx skillsandruless add owner/repo
 ```
 
 ## 命令
 
 ```bash
 # 添加技能
-npx skillshub add owner/repo
+npx skillsandruless add owner/repo
 
 # 添加规则
-npx skillshub add owner/repo --rule
+npx skillsandruless add owner/repo --rule
 
 # 列出已安装的技能 / 规则
-npx skillshub list
-npx skillshub list --rule
+npx skillsandruless list
+npx skillsandruless list --rule
 
 # 搜索技能
-npx skillshub find [keyword]
+npx skillsandruless find [keyword]
 
 # 移除
-npx skillshub remove skill-name
-npx skillshub remove --rule rule-name
+npx skillsandruless remove skill-name
+npx skillsandruless remove --rule rule-name
 
 # 检查更新
-npx skillshub check
+npx skillsandruless check
 
 # 更新全部
-npx skillshub update
+npx skillsandruless update
 
 # 创建新技能模板
-npx skillshub init [name]
+npx skillsandruless init [name]
 ```
 
 ## 常用选项
@@ -59,25 +59,25 @@ npx skillshub init [name]
 
 ```bash
 # 从仓库安装指定技能
-npx skillshub add owner/repo --skill frontend-design --skill web-design
+npx skillsandruless add owner/repo --skill frontend-design --skill web-design
 
 # 全局安装到指定代理
-npx skillshub add owner/repo -g -a claude-code
+npx skillsandruless add owner/repo -g -a claude-code
 
 # 非交互模式（CI 友好）
-npx skillshub add owner/repo --skill my-skill -a claude-code -y
+npx skillsandruless add owner/repo --skill my-skill -a claude-code -y
 
 # 移除所有技能
-npx skillshub remove --all
+npx skillsandruless remove --all
 ```
 
 ## 来源格式
 
 ```bash
-npx skillshub add owner/repo                           # GitHub 简写
-npx skillshub add https://github.com/owner/repo        # 完整 URL
-npx skillshub add https://gitlab.com/org/repo          # GitLab
-npx skillshub add ./local-path                          # 本地目录
+npx skillsandruless add owner/repo                           # GitHub 简写
+npx skillsandruless add https://github.com/owner/repo        # 完整 URL
+npx skillsandruless add https://gitlab.com/org/repo          # GitLab
+npx skillsandruless add ./local-path                          # 本地目录
 ```
 
 ## 什么是 Agent Skills？
