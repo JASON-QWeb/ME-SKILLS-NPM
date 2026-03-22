@@ -382,6 +382,8 @@ export async function removeCommand(skillNames: string[], options: RemoveOptions
 
       if (isGlobal) {
         await removeSkillFromLock(skillName);
+      } else {
+        await removeSkillFromLocalLock(skillName, cwd, 'skill');
       }
 
       results.push({

@@ -45,36 +45,36 @@ const DIM = '\x1b[38;5;102m'; // darker gray for secondary text
 const TEXT = '\x1b[38;5;145m'; // lighter gray for primary text
 
 const LOGO_LINES = [
-  '███████╗██╗  ██╗██╗██╗     ██╗     ███████╗',
-  '██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝',
-  '███████╗█████╔╝ ██║██║     ██║     ███████╗',
-  '╚════██║██╔═██╗ ██║██║     ██║     ╚════██║',
-  '███████║██║  ██╗██║███████╗███████╗███████║',
-  '╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝',
+  '███████╗██╗  ██╗██╗██╗     ██╗        ██╗   ██████╗ ██╗   ██╗██╗     ███████╗',
+  '██╔════╝██║ ██╔╝██║██║     ██║        ██║   ██╔══██╗██║   ██║██║     ██╔════╝',
+  '███████╗█████╔╝ ██║██║     ██║     ████████╗██████╔╝██║   ██║██║     █████╗  ',
+  '╚════██║██╔═██╗ ██║██║     ██║     ██╔═██╔═╝██╔══██╗██║   ██║██║     ██╔══╝  ',
+  '███████║██║  ██╗██║███████╗███████╗██████║  ██║  ██║╚██████╔╝███████╗███████╗',
+  '╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝',
 ];
 
-// 256-color middle grays - visible on both light and dark backgrounds
-const GRAYS = [
-  '\x1b[38;5;250m', // lighter gray
-  '\x1b[38;5;248m',
-  '\x1b[38;5;245m', // mid gray
-  '\x1b[38;5;243m',
-  '\x1b[38;5;240m',
-  '\x1b[38;5;238m', // darker gray
+// Blue-gray metallic gradient - visible on both light and dark backgrounds
+const LOGO_COLORS = [
+  '\x1b[38;5;75m', // bright steel blue
+  '\x1b[38;5;110m', // steel blue
+  '\x1b[38;5;146m', // blue-gray
+  '\x1b[38;5;145m', // warm silver
+  '\x1b[38;5;103m', // dark steel
+  '\x1b[38;5;60m', // deep blue-gray
 ];
 
 function showLogo(): void {
   console.log();
   LOGO_LINES.forEach((line, i) => {
-    console.log(`${GRAYS[i]}${line}${RESET}`);
+    console.log(`${LOGO_COLORS[i]}${line}${RESET}`);
   });
 }
 
 function showBanner(): void {
   showLogo();
   console.log();
-  console.log(`${TEXT}SkillsHub${RESET}`);
-  console.log(`${DIM}The open agent skills ecosystem${RESET}`);
+  console.log(`${TEXT}SkillAndRule${RESET}`);
+  console.log(`${DIM}The open agent skills & rules ecosystem${RESET}`);
   console.log();
   console.log(
     `  ${DIM}$${RESET} ${TEXT}npx skillsandruless add ${DIM}<package>${RESET}        ${DIM}Add a new skill${RESET}`
@@ -117,7 +117,7 @@ function showBanner(): void {
 
 function showHelp(): void {
   console.log(`
-${BOLD}SkillsHub${RESET}
+${BOLD}SkillAndRule${RESET}
 
 ${BOLD}Usage:${RESET} skillsandruless <command> [options]
 

@@ -10,7 +10,7 @@ describe('skillshub CLI', () => {
       const output = runCliOutput(['--help']);
       expect(output).toContain('Usage: skillsandruless <command> [options]');
       expect(output).toContain('Manage Skills:');
-      expect(output).toContain('SkillsHub');
+      expect(output).toContain('SkillAndRule');
       expect(output).toContain('init [name]');
       expect(output).toContain('add <package>');
       expect(output).toContain('check');
@@ -58,7 +58,7 @@ describe('skillshub CLI', () => {
   describe('no arguments', () => {
     it('should display banner', () => {
       const output = stripLogo(runCliOutput([]));
-      expect(output).toContain('SkillsHub');
+      expect(output).toContain('SkillAndRule');
       expect(output).toContain('npx skillsandruless add');
       expect(output).toContain('npx skillsandruless add https://github.com/org/repo --rule');
       expect(output).toContain('npx skillsandruless check');
