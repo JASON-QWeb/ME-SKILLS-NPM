@@ -1,98 +1,98 @@
 # SkillsHub
 
-CLI for installing and managing agent skills and rules across coding agents.
+跨编码代理安装和管理 agent skills 与 rules 的 CLI 工具。
 
 <!-- agent-list:start -->
-Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [39 more](#available-agents).
+支持 **OpenCode**, **Claude Code**, **Codex**, **Cursor** 以及 [其他 39 个代理](#支持的代理)。
 <!-- agent-list:end -->
 
-[中文文档](README.zh-CN.md)
+[English](README.md)
 
-## Install
+## 安装
 
 ```bash
 npx skillshub add owner/repo
 ```
 
-## Commands
+## 命令
 
 ```bash
-# Add a skill
+# 添加技能
 npx skillshub add owner/repo
 
-# Add a rule
+# 添加规则
 npx skillshub add owner/repo --rule
 
-# List installed skills / rules
+# 列出已安装的技能 / 规则
 npx skillshub list
 npx skillshub list --rule
 
-# Search skills
+# 搜索技能
 npx skillshub find [keyword]
 
-# Remove
+# 移除
 npx skillshub remove skill-name
 npx skillshub remove --rule rule-name
 
-# Check for updates
+# 检查更新
 npx skillshub check
 
-# Update all
+# 更新全部
 npx skillshub update
 
-# Create a new skill template
+# 创建新技能模板
 npx skillshub init [name]
 ```
 
-## Common Options
+## 常用选项
 
-| Option | Description |
+| 选项 | 描述 |
 | --- | --- |
-| `-g, --global` | Install/remove globally instead of project-level |
-| `-a, --agent <name>` | Target specific agent (e.g. `claude-code`, `cursor`) |
-| `-s, --skill <name>` | Select specific skill by name |
-| `--rule` | Operate on rules instead of skills |
-| `-y, --yes` | Skip confirmation prompts |
-| `--all` | Target all skills/agents |
+| `-g, --global` | 全局安装/移除，而非项目级别 |
+| `-a, --agent <name>` | 指定目标代理（如 `claude-code`, `cursor`） |
+| `-s, --skill <name>` | 按名称选择特定技能 |
+| `--rule` | 操作规则而非技能 |
+| `-y, --yes` | 跳过确认提示 |
+| `--all` | 针对所有技能/代理 |
 
-## Examples
+## 示例
 
 ```bash
-# Install specific skills from a repo
+# 从仓库安装指定技能
 npx skillshub add owner/repo --skill frontend-design --skill web-design
 
-# Install to a specific agent globally
+# 全局安装到指定代理
 npx skillshub add owner/repo -g -a claude-code
 
-# Non-interactive (CI-friendly)
+# 非交互模式（CI 友好）
 npx skillshub add owner/repo --skill my-skill -a claude-code -y
 
-# Remove all skills
+# 移除所有技能
 npx skillshub remove --all
 ```
 
-## Source Formats
+## 来源格式
 
 ```bash
-npx skillshub add owner/repo                           # GitHub shorthand
-npx skillshub add https://github.com/owner/repo        # Full URL
+npx skillshub add owner/repo                           # GitHub 简写
+npx skillshub add https://github.com/owner/repo        # 完整 URL
 npx skillshub add https://gitlab.com/org/repo          # GitLab
-npx skillshub add ./local-path                          # Local directory
+npx skillshub add ./local-path                          # 本地目录
 ```
 
-## What are Agent Skills?
+## 什么是 Agent Skills？
 
-Agent skills are reusable instruction sets (`SKILL.md` files) that extend your coding agent's capabilities. Rules are single Markdown files that provide guidelines for agents.
+Agent Skills 是可复用的指令集（`SKILL.md` 文件），用于扩展编码代理的能力。Rules 是为代理提供指导规则的单个 Markdown 文件。
 
-Discover skills at **[skills.sh](https://skills.sh)**
+在 **[skills.sh](https://skills.sh)** 发现更多技能。
 
-## Available Agents
+## 支持的代理
 
 <details>
-<summary>Click to expand full agent list</summary>
+<summary>点击展开完整代理列表</summary>
 
 <!-- supported-agents:start -->
-| Agent | `--agent` | Project Path | Global Path |
+| 代理 | `--agent` | 项目路径 | 全局路径 |
 |-------|-----------|--------------|-------------|
 | Amp, Kimi Code CLI, Replit, Universal | `amp`, `kimi-cli`, `replit`, `universal` | `.agents/skills/` | `~/.config/agents/skills/` |
 | Antigravity | `antigravity` | `.agents/skills/` | `~/.gemini/antigravity/skills/` |
@@ -137,12 +137,12 @@ Discover skills at **[skills.sh](https://skills.sh)**
 
 </details>
 
-## More
+## 更多
 
-- [Publishing Guide](publish-to-npm.md)
-- [Agent Skills Specification](https://agentskills.io)
-- [Skills Directory](https://skills.sh)
+- [发布指南](publish-to-npm.zh-CN.md)
+- [Agent Skills 规范](https://agentskills.io)
+- [技能目录](https://skills.sh)
 
-## License
+## 许可证
 
 MIT
