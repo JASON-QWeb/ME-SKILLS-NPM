@@ -4,7 +4,7 @@
   "description": "SkillsHub CLI for agent skills and rules",
   "type": "module",
   "bin": {
-    "skillsandruless": "./bin/cli.mjs"
+    "skillsandruless": "./bin/cli.js"
   },
   "files": [
     "dist",
