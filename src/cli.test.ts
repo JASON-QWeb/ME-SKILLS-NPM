@@ -8,7 +8,7 @@ describe('skillshub CLI', () => {
   describe('--help', () => {
     it('should display help message', () => {
       const output = runCliOutput(['--help']);
-      expect(output).toContain('Usage: skillshub <command> [options]');
+      expect(output).toContain('Usage: skillsandruless <command> [options]');
       expect(output).toContain('Manage Skills:');
       expect(output).toContain('SkillsHub');
       expect(output).toContain('init [name]');
@@ -27,9 +27,9 @@ describe('skillshub CLI', () => {
 
     it('should display branded remove help', () => {
       const output = runCliOutput(['remove', '--help']);
-      expect(output).toContain('Usage: skillshub remove [skills...] [options]');
-      expect(output).toContain('skillshub remove');
-      expect(output).toContain('skillshub rm --agent claude-code my-skill');
+      expect(output).toContain('Usage: skillsandruless remove [skills...] [options]');
+      expect(output).toContain('skillsandruless remove');
+      expect(output).toContain('skillsandruless rm --agent claude-code my-skill');
       expect(output).toContain('--rule');
     });
 
@@ -59,11 +59,11 @@ describe('skillshub CLI', () => {
     it('should display banner', () => {
       const output = stripLogo(runCliOutput([]));
       expect(output).toContain('SkillsHub');
-      expect(output).toContain('npx skillshub add');
-      expect(output).toContain('npx skillshub add https://github.com/org/repo --rule');
-      expect(output).toContain('npx skillshub check');
-      expect(output).toContain('npx skillshub update');
-      expect(output).toContain('npx skillshub init');
+      expect(output).toContain('npx skillsandruless add');
+      expect(output).toContain('npx skillsandruless add https://github.com/org/repo --rule');
+      expect(output).toContain('npx skillsandruless check');
+      expect(output).toContain('npx skillsandruless update');
+      expect(output).toContain('npx skillsandruless init');
       expect(output).toContain('skills.sh');
     });
   });
@@ -73,7 +73,7 @@ describe('skillshub CLI', () => {
       const output = runCliOutput(['unknown-command']);
       expect(output).toMatchInlineSnapshot(`
         "Unknown command: unknown-command
-        Run skillshub --help for usage.
+        Run skillsandruless --help for usage.
         "
       `);
     });

@@ -77,39 +77,39 @@ function showBanner(): void {
   console.log(`${DIM}The open agent skills ecosystem${RESET}`);
   console.log();
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub add ${DIM}<package>${RESET}        ${DIM}Add a new skill${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless add ${DIM}<package>${RESET}        ${DIM}Add a new skill${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub add https://github.com/org/repo --rule${RESET} ${DIM}Add a rule${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless add https://github.com/org/repo --rule${RESET} ${DIM}Add a rule${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub remove${RESET}               ${DIM}Remove installed skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless remove${RESET}               ${DIM}Remove installed skills${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub list${RESET}                 ${DIM}List installed skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless list${RESET}                 ${DIM}List installed skills${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub find ${DIM}[query]${RESET}         ${DIM}Search for skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless find ${DIM}[query]${RESET}         ${DIM}Search for skills${RESET}`
   );
   console.log();
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub check${RESET}                ${DIM}Check for updates${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless check${RESET}                ${DIM}Check for updates${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub update${RESET}               ${DIM}Update all skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless update${RESET}               ${DIM}Update all skills${RESET}`
   );
   console.log();
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub experimental_install${RESET} ${DIM}Restore from skillshub-lock.json${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless experimental_install${RESET} ${DIM}Restore from skillshub-lock.json${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub init ${DIM}[name]${RESET}          ${DIM}Create a new skill${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless init ${DIM}[name]${RESET}          ${DIM}Create a new skill${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillshub experimental_sync${RESET}    ${DIM}Sync skills from node_modules${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless experimental_sync${RESET}    ${DIM}Sync skills from node_modules${RESET}`
   );
   console.log();
-  console.log(`${DIM}try:${RESET} npx skillshub add vercel-labs/agent-skills`);
+  console.log(`${DIM}try:${RESET} npx skillsandruless add vercel-labs/agent-skills`);
   console.log();
   console.log(`Discover more skills at ${TEXT}https://skills.sh/${RESET}`);
   console.log();
@@ -119,7 +119,7 @@ function showHelp(): void {
   console.log(`
 ${BOLD}SkillsHub${RESET}
 
-${BOLD}Usage:${RESET} skillshub <command> [options]
+${BOLD}Usage:${RESET} skillsandruless <command> [options]
 
 ${BOLD}Manage Skills:${RESET}
   add <package>        Add a skill package (alias: a)
@@ -173,25 +173,25 @@ ${BOLD}Options:${RESET}
   --version, -v     Show version number
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} skillshub add vercel-labs/agent-skills
-  ${DIM}$${RESET} skillshub add vercel-labs/agent-skills -g
-  ${DIM}$${RESET} skillshub add vercel-labs/agent-skills --agent claude-code cursor
-  ${DIM}$${RESET} skillshub add vercel-labs/agent-skills --skill pr-review commit
-  ${DIM}$${RESET} skillshub remove                        ${DIM}# interactive remove${RESET}
-  ${DIM}$${RESET} skillshub remove web-design             ${DIM}# remove by name${RESET}
-  ${DIM}$${RESET} skillshub rm --global frontend-design
-  ${DIM}$${RESET} skillshub list                          ${DIM}# list project skills${RESET}
-  ${DIM}$${RESET} skillshub ls -g                         ${DIM}# list global skills${RESET}
-  ${DIM}$${RESET} skillshub ls -a claude-code             ${DIM}# filter by agent${RESET}
-  ${DIM}$${RESET} skillshub ls --json                      ${DIM}# JSON output${RESET}
-  ${DIM}$${RESET} skillshub find                          ${DIM}# interactive search${RESET}
-  ${DIM}$${RESET} skillshub find typescript               ${DIM}# search by keyword${RESET}
-  ${DIM}$${RESET} skillshub check
-  ${DIM}$${RESET} skillshub update
-  ${DIM}$${RESET} skillshub experimental_install            ${DIM}# restore from skillshub-lock.json${RESET}
-  ${DIM}$${RESET} skillshub init my-skill
-  ${DIM}$${RESET} skillshub experimental_sync              ${DIM}# sync from node_modules${RESET}
-  ${DIM}$${RESET} skillshub experimental_sync -y           ${DIM}# sync without prompts${RESET}
+  ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills
+  ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills -g
+  ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills --agent claude-code cursor
+  ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills --skill pr-review commit
+  ${DIM}$${RESET} skillsandruless remove                        ${DIM}# interactive remove${RESET}
+  ${DIM}$${RESET} skillsandruless remove web-design             ${DIM}# remove by name${RESET}
+  ${DIM}$${RESET} skillsandruless rm --global frontend-design
+  ${DIM}$${RESET} skillsandruless list                          ${DIM}# list project skills${RESET}
+  ${DIM}$${RESET} skillsandruless ls -g                         ${DIM}# list global skills${RESET}
+  ${DIM}$${RESET} skillsandruless ls -a claude-code             ${DIM}# filter by agent${RESET}
+  ${DIM}$${RESET} skillsandruless ls --json                      ${DIM}# JSON output${RESET}
+  ${DIM}$${RESET} skillsandruless find                          ${DIM}# interactive search${RESET}
+  ${DIM}$${RESET} skillsandruless find typescript               ${DIM}# search by keyword${RESET}
+  ${DIM}$${RESET} skillsandruless check
+  ${DIM}$${RESET} skillsandruless update
+  ${DIM}$${RESET} skillsandruless experimental_install            ${DIM}# restore from skillshub-lock.json${RESET}
+  ${DIM}$${RESET} skillsandruless init my-skill
+  ${DIM}$${RESET} skillsandruless experimental_sync              ${DIM}# sync from node_modules${RESET}
+  ${DIM}$${RESET} skillsandruless experimental_sync -y           ${DIM}# sync without prompts${RESET}
 
 Discover more skills at ${TEXT}https://skills.sh/${RESET}
 `);
@@ -199,7 +199,7 @@ Discover more skills at ${TEXT}https://skills.sh/${RESET}
 
 function showRemoveHelp(): void {
   console.log(`
-${BOLD}Usage:${RESET} skillshub remove [skills...] [options]
+${BOLD}Usage:${RESET} skillsandruless remove [skills...] [options]
 
 ${BOLD}Description:${RESET}
   Remove installed skills from agents. If no skill names are provided,
@@ -217,14 +217,14 @@ ${BOLD}Options:${RESET}
   --all              Shorthand for --skill '*' --agent '*' -y
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} skillshub remove                           ${DIM}# interactive selection${RESET}
-  ${DIM}$${RESET} skillshub remove my-skill                   ${DIM}# remove specific skill${RESET}
-  ${DIM}$${RESET} skillshub remove skill1 skill2 -y           ${DIM}# remove multiple skills${RESET}
-  ${DIM}$${RESET} skillshub remove --global my-skill          ${DIM}# remove from global scope${RESET}
-  ${DIM}$${RESET} skillshub rm --agent claude-code my-skill   ${DIM}# remove from specific agent${RESET}
-  ${DIM}$${RESET} skillshub remove --all                      ${DIM}# remove all skills${RESET}
-  ${DIM}$${RESET} skillshub remove --skill '*' -a cursor      ${DIM}# remove all skills from cursor${RESET}
-  ${DIM}$${RESET} skillshub remove --rule react -y             ${DIM}# remove a rule${RESET}
+  ${DIM}$${RESET} skillsandruless remove                           ${DIM}# interactive selection${RESET}
+  ${DIM}$${RESET} skillsandruless remove my-skill                   ${DIM}# remove specific skill${RESET}
+  ${DIM}$${RESET} skillsandruless remove skill1 skill2 -y           ${DIM}# remove multiple skills${RESET}
+  ${DIM}$${RESET} skillsandruless remove --global my-skill          ${DIM}# remove from global scope${RESET}
+  ${DIM}$${RESET} skillsandruless rm --agent claude-code my-skill   ${DIM}# remove from specific agent${RESET}
+  ${DIM}$${RESET} skillsandruless remove --all                      ${DIM}# remove all skills${RESET}
+  ${DIM}$${RESET} skillsandruless remove --skill '*' -a cursor      ${DIM}# remove all skills from cursor${RESET}
+  ${DIM}$${RESET} skillsandruless remove --rule react -y             ${DIM}# remove a rule${RESET}
 
 Discover more skills at ${TEXT}https://skills.sh/${RESET}
 `);
@@ -283,10 +283,10 @@ Describe when this skill should be used.
   console.log();
   console.log(`${DIM}Publishing:${RESET}`);
   console.log(
-    `  ${DIM}GitHub:${RESET}  Push to a repo, then ${TEXT}npx skillshub add <owner>/<repo>${RESET}`
+    `  ${DIM}GitHub:${RESET}  Push to a repo, then ${TEXT}npx skillsandruless add <owner>/<repo>${RESET}`
   );
   console.log(
-    `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}npx skillshub add https://example.com/${displayPath}${RESET}`
+    `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}npx skillsandruless add https://example.com/${displayPath}${RESET}`
   );
   console.log();
   console.log(`Browse existing skills for inspiration at ${TEXT}https://skills.sh/${RESET}`);
@@ -472,7 +472,9 @@ async function runCheck(args: string[] = []): Promise<void> {
 
   if (trackedEntries.length === 0) {
     console.log(`${DIM}No tracked resources in lock files.${RESET}`);
-    console.log(`${DIM}Install resources with${RESET} ${TEXT}npx skillshub add <package>${RESET}`);
+    console.log(
+      `${DIM}Install resources with${RESET} ${TEXT}npx skillsandruless add <package>${RESET}`
+    );
     return;
   }
 
@@ -496,7 +498,7 @@ async function runCheck(args: string[] = []): Promise<void> {
         name,
         reason: getSkipReason(entry),
         sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
-        command: `npx skillshub ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
+        command: `npx skillsandruless ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
       });
       continue;
     }
@@ -537,7 +539,7 @@ async function runCheck(args: string[] = []): Promise<void> {
     }
     console.log();
     console.log(
-      `${DIM}Run${RESET} ${TEXT}npx skillshub update${RESET} ${DIM}to update all tracked resources${RESET}`
+      `${DIM}Run${RESET} ${TEXT}npx skillsandruless update${RESET} ${DIM}to update all tracked resources${RESET}`
     );
   }
 
@@ -571,7 +573,9 @@ async function runUpdate(): Promise<void> {
 
   if (trackedEntries.length === 0) {
     console.log(`${DIM}No tracked resources in lock files.${RESET}`);
-    console.log(`${DIM}Install resources with${RESET} ${TEXT}npx skillshub add <package>${RESET}`);
+    console.log(
+      `${DIM}Install resources with${RESET} ${TEXT}npx skillsandruless add <package>${RESET}`
+    );
     return;
   }
 
@@ -593,7 +597,7 @@ async function runUpdate(): Promise<void> {
         name,
         reason: getSkipReason(entry),
         sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
-        command: `npx skillshub ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
+        command: `npx skillsandruless ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
       });
       continue;
     }
@@ -638,7 +642,7 @@ async function runUpdate(): Promise<void> {
     const { args: installArgs } = buildUpdateInstallInvocation(update);
 
     // Reinstall using the current CLI entrypoint directly (avoid nested npm exec/npx)
-    const cliEntry = join(__dirname, '..', 'bin', 'cli.mjs');
+    const cliEntry = join(__dirname, '..', 'bin', 'cli.js');
     if (!existsSync(cliEntry)) {
       failCount++;
       console.log(
@@ -762,7 +766,7 @@ async function main(): Promise<void> {
 
     default:
       console.log(`Unknown command: ${command}`);
-      console.log(`Run ${BOLD}skillshub --help${RESET} for usage.`);
+      console.log(`Run ${BOLD}skillsandruless --help${RESET} for usage.`);
   }
 }
 

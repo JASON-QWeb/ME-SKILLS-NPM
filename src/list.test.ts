@@ -343,16 +343,16 @@ description: A test skill
 
     it('should include list examples in help', () => {
       const result = runCli(['--help']);
-      expect(result.stdout).toContain('skillshub list');
-      expect(result.stdout).toContain('skillshub ls -g');
-      expect(result.stdout).toContain('skillshub ls -a claude-code');
+      expect(result.stdout).toContain('skillsandruless list');
+      expect(result.stdout).toContain('skillsandruless ls -g');
+      expect(result.stdout).toContain('skillsandruless ls -a claude-code');
     });
   });
 
   describe('banner', () => {
     it('should include list command in banner', () => {
       const result = runCli([]);
-      expect(result.stdout).toContain('npx skillshub list');
+      expect(result.stdout).toContain('npx skillsandruless list');
       expect(result.stdout).toContain('List installed skills');
     });
   });

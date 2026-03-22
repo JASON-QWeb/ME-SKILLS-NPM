@@ -1,0 +1,134 @@
+{
+  "version": 2,
+  "skills": {
+    "rule:react": {
+      "source": "JASON-QWeb/agent-skills",
+      "sourceType": "github",
+      "resourceType": "rule",
+      "targetType": "cline-me",
+      "targetTypes": [
+        "cline-me"
+      ],
+      "sourceRef": "",
+      "resourcePath": "rules/react.md",
+      "remoteHash": "b2283d32379a4e2dda4895a3ebb2cf8d1d7d82f0f280531beee0ed171a2c51a4",
+      "computedHash": "b2283d32379a4e2dda4895a3ebb2cf8d1d7d82f0f280531beee0ed171a2c51a4",
+      "sourceUrl": "https://github.com/JASON-QWeb/agent-skills.git",
+      "skillPath": "rules/react.md",
+      "skillFolderHash": "b2283d32379a4e2dda4895a3ebb2cf8d1d7d82f0f280531beee0ed171a2c51a4"
+    },
+    "rule:security": {
+      "source": "JASON-QWeb/agent-skills",
+      "sourceType": "github",
+      "resourceType": "rule",
+      "targetType": "cline-me",
+      "targetTypes": [
+        "cline-me"
+      ],
+      "sourceRef": "",
+      "resourcePath": "rules/security.md",
+      "remoteHash": "dc81226943ae3b7d3113a6107ff37141f7c68be3af23c62d0b5d616fe809db11",
+      "computedHash": "dc81226943ae3b7d3113a6107ff37141f7c68be3af23c62d0b5d616fe809db11",
+      "sourceUrl": "https://github.com/JASON-QWeb/agent-skills.git",
+      "skillPath": "rules/security.md",
+      "skillFolderHash": "dc81226943ae3b7d3113a6107ff37141f7c68be3af23c62d0b5d616fe809db11"
+    },
+    "rule:typescript": {
+      "source": "JASON-QWeb/agent-skills",
+      "sourceType": "github",
+      "resourceType": "rule",
+      "targetType": "cline-me",
+      "targetTypes": [
+        "cline-me"
+      ],
+      "sourceRef": "",
+      "resourcePath": "rules/typescript.md",
+      "remoteHash": "74562c7be32444f893e8bfc924a9ad5d99016204b72761af1bc32418abef9980",
+      "computedHash": "74562c7be32444f893e8bfc924a9ad5d99016204b72761af1bc32418abef9980",
+      "sourceUrl": "https://github.com/JASON-QWeb/agent-skills.git",
+      "skillPath": "rules/typescript.md",
+      "skillFolderHash": "74562c7be32444f893e8bfc924a9ad5d99016204b72761af1bc32418abef9980"
+    },
+    "skill:api-designer": {
+      "source": "JASON-QWeb/agent-skills",
+      "sourceType": "github",
+      "resourceType": "skill",
+      "targetType": "amp",
+      "targetTypes": [
+        "amp",
+        "antigravity",
+        "cline",
+        "codex",
+        "cursor",
+        "deepagents",
+        "gemini-cli",
+        "github-copilot",
+        "kimi-cli",
+        "opencode",
+        "warp",
+        "cline-me",
+        "claude-code"
+      ],
+      "sourceRef": "main",
+      "resourcePath": "skills/api-designer/SKILL.md",
+      "remoteHash": "a937f4088f5d90cad7e4c8ccd269588e16ae2c22ef3b05953e2583df5596defb",
+      "computedHash": "a937f4088f5d90cad7e4c8ccd269588e16ae2c22ef3b05953e2583df5596defb",
+      "sourceUrl": "https://github.com/JASON-QWeb/agent-skills.git",
+      "skillFolderHash": "a937f4088f5d90cad7e4c8ccd269588e16ae2c22ef3b05953e2583df5596defb"
+    },
+    "skill:code-reviewer": {
+      "source": "JASON-QWeb/agent-skills",
+      "sourceType": "github",
+      "resourceType": "skill",
+      "targetType": "amp",
+      "targetTypes": [
+        "amp",
+        "antigravity",
+        "cline",
+        "codex",
+        "cursor",
+        "deepagents",
+        "gemini-cli",
+        "github-copilot",
+        "kimi-cli",
+        "opencode",
+        "warp",
+        "cline-me",
+        "claude-code"
+      ],
+      "sourceRef": "main",
+      "resourcePath": "skills/code-reviewer/SKILL.md",
+      "remoteHash": "2ea37cce58335e941d2ed03263758cd354645c76d5668ca42f7f84ddc9649709",
+      "computedHash": "2ea37cce58335e941d2ed03263758cd354645c76d5668ca42f7f84ddc9649709",
+      "sourceUrl": "https://github.com/JASON-QWeb/agent-skills.git",
+      "skillFolderHash": "2ea37cce58335e941d2ed03263758cd354645c76d5668ca42f7f84ddc9649709"
+    },
+    "skill:git-commit-helper": {
+      "source": "JASON-QWeb/agent-skills",
+      "sourceType": "github",
+      "resourceType": "skill",
+      "targetType": "amp",
+      "targetTypes": [
+        "amp",
+        "antigravity",
+        "cline",
+        "codex",
+        "cursor",
+        "deepagents",
+        "gemini-cli",
+        "github-copilot",
+        "kimi-cli",
+        "opencode",
+        "warp",
+        "cline-me",
+        "claude-code"
+      ],
+      "sourceRef": "main",
+      "resourcePath": "skills/git-commit-helper/SKILL.md",
+      "remoteHash": "7a3bf6b64b2e62b7a35dda103fa404bd81b66ccb7e7c9c2b6b5218c5e6882387",
+      "computedHash": "7a3bf6b64b2e62b7a35dda103fa404bd81b66ccb7e7c9c2b6b5218c5e6882387",
+      "sourceUrl": "https://github.com/JASON-QWeb/agent-skills.git",
+      "skillFolderHash": "7a3bf6b64b2e62b7a35dda103fa404bd81b66ccb7e7c9c2b6b5218c5e6882387"
+    }
+  }
+}
