@@ -766,11 +766,8 @@ async function main(): Promise<void> {
   }
 }
 
-const __selfPath = fileURLToPath(import.meta.url);
-const __argv1 = process.argv[1];
-if (
-  __argv1 &&
-  (__argv1 === __selfPath || __argv1.endsWith('/bin/cli.js') || __argv1.endsWith('\\bin\\cli.js'))
-) {
+export { main };
+
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
   void main();
 }
