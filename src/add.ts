@@ -1573,6 +1573,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
         if (successfulSkillNames.has(skillDisplayName)) {
           try {
             const computedHash = await computeSkillFolderHash(skill.path);
+            const localSkillPath = skillFiles[skill.name];
             await addSkillToLocalLock(
               skill.name,
               {
@@ -1583,7 +1584,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
                 targetType,
                 targetTypes,
                 sourceRef: parsed.ref ?? '',
-                resourcePath: skill.path,
+                resourcePath: localSkillPath || skill.path,
                 remoteHash: computedHash,
                 computedHash,
               },
