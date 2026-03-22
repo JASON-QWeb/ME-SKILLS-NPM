@@ -1,6 +1,6 @@
 {
   "name": "skillshub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SkillsHub CLI for agent skills and rules",
   "type": "module",
   "bin": {
