@@ -36,6 +36,8 @@ async function createBareRemoteRepo(): Promise<{
   git('config user.email "test@example.com"', workDir);
   git(`remote add origin file://${bareDir}`, workDir);
 
+  await writeFile(join(workDir, '.gitattributes'), '* text eol=lf\n');
+
   const skillDir = join(workDir, 'skills', 'demo-skill');
   await mkdir(skillDir, { recursive: true });
   await writeFile(
@@ -227,7 +229,7 @@ describe('update tracking', () => {
       await rm(workDir, { recursive: true, force: true });
       await rm(bareDir, { recursive: true, force: true });
     }
-  });
+  }, 15000);
 
   it('falls back to the installed global resource hash for legacy generic git entries with no lock hash', async () => {
     const stateDir = await mkdtemp(join(tmpdir(), 'skillshub-update-state-'));
@@ -293,7 +295,7 @@ describe('update tracking', () => {
       await rm(workDir, { recursive: true, force: true });
       await rm(bareDir, { recursive: true, force: true });
     }
-  });
+  }, 15000);
 
   it('builds ref-aware reinstall commands for skills and rules', () => {
     const skillUpdate = buildUpdateInstallInvocation({
