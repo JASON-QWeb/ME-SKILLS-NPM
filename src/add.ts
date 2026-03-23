@@ -2133,8 +2133,20 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.list = true;
     } else if (arg === '--all') {
       options.all = true;
-    } else if (arg === '--rule' || arg === '--rules') {
+    } else if (arg === '--rules') {
       options.rule = true;
+    } else if (arg === '--rule') {
+      options.rule = true;
+      // Collect specific rule names (like --skill does)
+      i++;
+      let nextArg = args[i];
+      while (i < args.length && nextArg && !nextArg.startsWith('-')) {
+        options.skill = options.skill || [];
+        options.skill.push(nextArg);
+        i++;
+        nextArg = args[i];
+      }
+      i--;
     } else if (arg === '-a' || arg === '--agent') {
       options.agent = options.agent || [];
       i++;
