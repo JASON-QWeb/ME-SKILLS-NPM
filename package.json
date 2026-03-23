@@ -1,6 +1,6 @@
 {
   "name": "skillsandruless",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "SkillsHub CLI for agent skills and rules",
   "type": "module",
   "bin": {
