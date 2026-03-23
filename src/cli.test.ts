@@ -27,9 +27,10 @@ describe('skillshub CLI', () => {
 
     it('should display branded remove help', () => {
       const output = runCliOutput(['remove', '--help']);
-      expect(output).toContain('Usage: skillsandruless remove [skills...] [options]');
+      expect(output).toContain('Usage: skillsandruless remove [options]');
       expect(output).toContain('skillsandruless remove');
-      expect(output).toContain('skillsandruless rm --agent claude-code my-skill');
+      expect(output).toContain('skillsandruless remove --skill my-skill');
+      expect(output).toContain('skillsandruless rm --agent claude-code --skill my-skill');
       expect(output).toContain('--rule');
     });
 

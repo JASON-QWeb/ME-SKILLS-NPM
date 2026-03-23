@@ -1057,6 +1057,11 @@ async function listInstalledRules(
   const scopes: Array<{ global: boolean; path: string; agentType?: AgentType }> = [];
 
   for (const { global: isGlobal } of scopeTypes) {
+    scopes.push({
+      global: isGlobal,
+      path: getCanonicalResourceDir(isGlobal, cwd, 'rule'),
+    });
+
     for (const agentType of agentsToCheck) {
       const agent = agents[agentType];
       if (isGlobal && agent.resources.rule?.globalDir === undefined) {
@@ -1084,8 +1089,9 @@ async function listInstalledRules(
 
         const rulePath = join(scope.path, entry.name);
         const name = entry.name.replace(/\.md$/, '');
-        const ruleKey = `${scope.global ? 'global' : 'project'}:${name}`;
-        const description = entry.name.replace(/\.md$/, '');
+        const scopeKey = scope.global ? 'global' : 'project';
+        const ruleKey = `${scopeKey}:${name}`;
+        const description = name;
 
         if (scope.agentType) {
           if (skillsMap.has(ruleKey)) {
@@ -1099,7 +1105,7 @@ async function listInstalledRules(
               description,
               path: rulePath,
               canonicalPath: rulePath,
-              scope: scope.global ? 'global' : 'project',
+              scope: scopeKey,
               agents: [scope.agentType],
             });
           }
@@ -1143,17 +1149,17 @@ async function listInstalledRules(
           }
         }
 
-        const scopeKey = scope.global ? 'global' : 'project';
-        const ruleKeyWithPath = `${scopeKey}:${name}`;
-        if (skillsMap.has(ruleKeyWithPath)) {
-          const existing = skillsMap.get(ruleKeyWithPath)!;
+        if (skillsMap.has(ruleKey)) {
+          const existing = skillsMap.get(ruleKey)!;
+          existing.path = rulePath;
+          existing.canonicalPath = rulePath;
           for (const agentType of installedAgents) {
             if (!existing.agents.includes(agentType)) {
               existing.agents.push(agentType);
             }
           }
         } else {
-          skillsMap.set(ruleKeyWithPath, {
+          skillsMap.set(ruleKey, {
             name,
             description,
             path: rulePath,

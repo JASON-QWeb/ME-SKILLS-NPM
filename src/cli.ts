@@ -2,17 +2,21 @@
 
 import { spawnSync } from 'child_process';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { basename, join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import * as p from '@clack/prompts';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
 import { runInstallFromLock } from './install.ts';
+import { getCanonicalPath, getInstallPath } from './installer.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { track } from './telemetry.ts';
 import { parseSource, getOwnerRepo } from './source-parser.ts';
 import {
+  computeContentHash,
   fetchSkillFolderHash,
   fetchRuleFileHash,
   getGitHubToken,
@@ -20,8 +24,9 @@ import {
   readSkillLock as readGlobalSkillLock,
   type SkillLockEntry as GlobalSkillLockEntry,
 } from './skill-lock.ts';
-import { readLocalLock, type LocalSkillLockEntry } from './local-lock.ts';
-import type { ResourceType } from './types.ts';
+import { computeSkillFolderHash, readLocalLock, type LocalSkillLockEntry } from './local-lock.ts';
+import { cleanupTempDir, cloneRepo } from './git.ts';
+import type { AgentType, ResourceType } from './types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -83,10 +88,10 @@ function showBanner(): void {
     `  ${DIM}$${RESET} ${TEXT}npx skillsandruless add https://github.com/org/repo --rule${RESET} ${DIM}Add a rule${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless remove${RESET}               ${DIM}Remove installed skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless remove${RESET}               ${DIM}Remove installed skills or rules${RESET}`
   );
   console.log(
-    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless list${RESET}                 ${DIM}List installed skills${RESET}`
+    `  ${DIM}$${RESET} ${TEXT}npx skillsandruless list${RESET}                 ${DIM}List installed skills or rules${RESET}`
   );
   console.log(
     `  ${DIM}$${RESET} ${TEXT}npx skillsandruless find ${DIM}[query]${RESET}         ${DIM}Search for skills${RESET}`
@@ -125,13 +130,14 @@ ${BOLD}Manage Skills:${RESET}
   add <package>        Add a skill package (alias: a)
                        e.g. vercel-labs/agent-skills
                             https://github.com/vercel-labs/agent-skills
-  remove [skills]      Remove installed skills
-  list, ls             List installed skills
+  remove [options]     Remove installed skills or rules
+  list, ls             List installed skills or rules
   find [query]         Search for skills interactively
 
 ${BOLD}Updates:${RESET}
   check                Check for available skill updates
   update               Update all skills to latest versions
+  --scope <scope>      Scope for check/update: project, global, or all
 
 ${BOLD}Project:${RESET}
   experimental_install Restore skills from skillshub-lock.json
@@ -153,9 +159,9 @@ ${BOLD}Remove Options:${RESET}
   -g, --global           Remove from global scope
   -a, --agent <agents>   Remove from specific agents (use '*' for all agents)
   -s, --skill <skills>   Specify skills to remove (use '*' for all skills)
-  --rule                 Operate on rule resources
+  --rule                 Operate on rule resources (names may follow this flag)
   -y, --yes              Skip confirmation prompts
-  --all                  Shorthand for --skill '*' --agent '*' -y
+  --all                  Remove all discovered resources in the selected scope
   
 ${BOLD}Experimental Sync Options:${RESET}
   -a, --agent <agents>   Specify agents to install to (use '*' for all agents)
@@ -177,11 +183,11 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills -g
   ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills --agent claude-code cursor
   ${DIM}$${RESET} skillsandruless add vercel-labs/agent-skills --skill pr-review commit
-  ${DIM}$${RESET} skillsandruless remove                        ${DIM}# interactive remove${RESET}
-  ${DIM}$${RESET} skillsandruless remove web-design             ${DIM}# remove by name${RESET}
-  ${DIM}$${RESET} skillsandruless rm --global frontend-design
-  ${DIM}$${RESET} skillsandruless list                          ${DIM}# list project skills${RESET}
-  ${DIM}$${RESET} skillsandruless ls -g                         ${DIM}# list global skills${RESET}
+  ${DIM}$${RESET} skillsandruless remove                        ${DIM}# interactive remove for skills + rules${RESET}
+  ${DIM}$${RESET} skillsandruless remove --skill web-design     ${DIM}# remove a skill by name${RESET}
+  ${DIM}$${RESET} skillsandruless rm --global --skill frontend-design
+  ${DIM}$${RESET} skillsandruless list                          ${DIM}# list project skills + rules${RESET}
+  ${DIM}$${RESET} skillsandruless ls -g                         ${DIM}# list global skills + rules${RESET}
   ${DIM}$${RESET} skillsandruless ls -a claude-code             ${DIM}# filter by agent${RESET}
   ${DIM}$${RESET} skillsandruless ls --json                      ${DIM}# JSON output${RESET}
   ${DIM}$${RESET} skillsandruless find                          ${DIM}# interactive search${RESET}
@@ -199,30 +205,31 @@ Discover more skills at ${TEXT}https://skills.sh/${RESET}
 
 function showRemoveHelp(): void {
   console.log(`
-${BOLD}Usage:${RESET} skillsandruless remove [skills...] [options]
+${BOLD}Usage:${RESET} skillsandruless remove [options]
 
 ${BOLD}Description:${RESET}
-  Remove installed skills from agents. If no skill names are provided,
-  an interactive selection menu will be shown.
+  Remove installed skills or rules from agents. By default, the command
+  shows an interactive mixed selection menu for both resource types.
+  To remove by name non-interactively, use --skill or --rule explicitly.
 
 ${BOLD}Arguments:${RESET}
-  skills            Optional skill names to remove (space-separated)
+  names             Optional only when used with --skill or --rule
 
 ${BOLD}Options:${RESET}
   -g, --global       Remove from global scope (~/) instead of project scope
   -a, --agent        Remove from specific agents (use '*' for all agents)
   -s, --skill        Specify skills to remove (use '*' for all skills)
-  --rule             Remove rule resources instead of skills
+  --rule             Remove rule resources instead of skills (names may follow)
   -y, --yes          Skip confirmation prompts
-  --all              Shorthand for --skill '*' --agent '*' -y
+  --all              Remove all discovered skills and rules in the selected scope
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} skillsandruless remove                           ${DIM}# interactive selection${RESET}
-  ${DIM}$${RESET} skillsandruless remove my-skill                   ${DIM}# remove specific skill${RESET}
-  ${DIM}$${RESET} skillsandruless remove skill1 skill2 -y           ${DIM}# remove multiple skills${RESET}
-  ${DIM}$${RESET} skillsandruless remove --global my-skill          ${DIM}# remove from global scope${RESET}
-  ${DIM}$${RESET} skillsandruless rm --agent claude-code my-skill   ${DIM}# remove from specific agent${RESET}
-  ${DIM}$${RESET} skillsandruless remove --all                      ${DIM}# remove all skills${RESET}
+  ${DIM}$${RESET} skillsandruless remove                            ${DIM}# interactive mixed selection${RESET}
+  ${DIM}$${RESET} skillsandruless remove --skill my-skill           ${DIM}# remove a specific skill${RESET}
+  ${DIM}$${RESET} skillsandruless remove --skill skill1 skill2 -y   ${DIM}# remove multiple skills${RESET}
+  ${DIM}$${RESET} skillsandruless remove --global --skill my-skill  ${DIM}# remove from global scope${RESET}
+  ${DIM}$${RESET} skillsandruless rm --agent claude-code --skill my-skill ${DIM}# remove from specific agent${RESET}
+  ${DIM}$${RESET} skillsandruless remove --all                      ${DIM}# remove all skills and rules${RESET}
   ${DIM}$${RESET} skillsandruless remove --skill '*' -a cursor      ${DIM}# remove all skills from cursor${RESET}
   ${DIM}$${RESET} skillsandruless remove --rule react -y             ${DIM}# remove a rule${RESET}
 
@@ -304,6 +311,11 @@ interface SkippedSkill {
   command: string;
 }
 
+type UpdateScope = 'project' | 'global' | 'all';
+
+const SHA1_HEX_RE = /^[a-f0-9]{40}$/i;
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
+
 /**
  * Determine why a skill cannot be checked for updates automatically.
  */
@@ -312,11 +324,20 @@ function getSkipReason(entry: GlobalSkillLockEntry | LocalSkillLockEntry): strin
   if (entry.sourceType === 'local') {
     return 'Local path';
   }
-  if (entry.sourceType === 'git') {
-    return 'Git URL (hash tracking not supported)';
+  if (entry.sourceType === 'well-known') {
+    return 'Well-known URL';
   }
-  if (!getEntryRemoteHash(entry as GlobalSkillLockEntry | LocalSkillLockEntry)) {
-    return 'No version hash available';
+  if (entry.sourceType === 'node_modules') {
+    return 'node_modules sync';
+  }
+  if (isPinnedRef(getEntrySourceRef(entry))) {
+    return 'Pinned commit reference';
+  }
+  if (!isGitBackedSourceType(entry.sourceType)) {
+    return 'Unsupported source type';
+  }
+  if (!getEntryStoredHash(entry as GlobalSkillLockEntry | LocalSkillLockEntry)) {
+    return 'No tracked resource hash';
   }
   if (!getEntryResourcePath(entry as GlobalSkillLockEntry | LocalSkillLockEntry)) {
     return resourceType === 'rule' ? 'No rule path recorded' : 'No skill path recorded';
@@ -358,8 +379,34 @@ function getEntryRemoteHash(entry: GlobalSkillLockEntry | LocalSkillLockEntry): 
   );
 }
 
+function getEntryStoredHash(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  return (
+    (entry as LocalSkillLockEntry).computedHash || entry.remoteHash || entry.skillFolderHash || ''
+  );
+}
+
 function getEntrySourceRef(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
   return entry.sourceRef || '';
+}
+
+function isPinnedRef(ref: string): boolean {
+  return SHA1_HEX_RE.test(ref.trim());
+}
+
+function isGitBackedSourceType(sourceType: string): boolean {
+  return sourceType === 'github' || sourceType === 'gitlab' || sourceType === 'git';
+}
+
+function isSha256Hash(value: string): boolean {
+  return SHA256_HEX_RE.test(value.trim());
+}
+
+function getDisplaySource(entry: GlobalSkillLockEntry | LocalSkillLockEntry): string {
+  const sourceUrl = entry.sourceUrl || entry.source;
+  if (entry.sourceType === 'github') {
+    return getOwnerRepo(parseSource(sourceUrl)) || sourceUrl;
+  }
+  return sourceUrl;
 }
 
 function stripGitSuffix(sourceUrl: string): string {
@@ -409,22 +456,34 @@ function getEntryTargetTypes(entry: GlobalSkillLockEntry | LocalSkillLockEntry):
 }
 
 export async function collectTrackedUpdateEntries(
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  scope: UpdateScope = 'all'
 ): Promise<TrackedUpdateEntry[]> {
-  const [globalLock, localLock] = await Promise.all([readGlobalSkillLock(), readLocalLock(cwd)]);
+  const tracked: TrackedUpdateEntry[] = [];
 
-  const globalEntries = Object.entries(globalLock.skills).map(([key, entry]) => ({
-    name: parseLockResourceKey(key, entry.resourceType).name,
-    scope: 'global' as const,
-    entry,
-  }));
-  const localEntries = Object.entries(localLock.skills).map(([key, entry]) => ({
-    name: parseLockResourceKey(key, entry.resourceType).name,
-    scope: 'project' as const,
-    entry,
-  }));
+  if (scope === 'all' || scope === 'global') {
+    const globalLock = await readGlobalSkillLock();
+    tracked.push(
+      ...Object.entries(globalLock.skills).map(([key, entry]) => ({
+        name: parseLockResourceKey(key, entry.resourceType).name,
+        scope: 'global' as const,
+        entry,
+      }))
+    );
+  }
 
-  return [...globalEntries, ...localEntries];
+  if (scope === 'all' || scope === 'project') {
+    const localLock = await readLocalLock(cwd);
+    tracked.push(
+      ...Object.entries(localLock.skills).map(([key, entry]) => ({
+        name: parseLockResourceKey(key, entry.resourceType).name,
+        scope: 'project' as const,
+        entry,
+      }))
+    );
+  }
+
+  return tracked;
 }
 
 export function buildUpdateInstallInvocation(update: TrackedUpdateEntry): {
@@ -432,13 +491,14 @@ export function buildUpdateInstallInvocation(update: TrackedUpdateEntry): {
   args: string[];
 } {
   const entry = update.entry;
-  const ref = getEntrySourceRef(entry) || 'main';
+  const ref = getEntrySourceRef(entry);
   const resourcePath = getEntryResourcePath(entry);
   const resourceType = getEntryResourceType(entry);
-
-  const parsedSource = parseSource(entry.sourceUrl || entry.source);
-  let sourceUrl = stripGitSuffix(parsedSource.url);
-  if (entry.sourceType === 'github') {
+  const originalSource = entry.sourceUrl || entry.source;
+  let sourceUrl = originalSource;
+  if (entry.sourceType === 'github' && ref) {
+    const parsedSource = parseSource(originalSource);
+    sourceUrl = stripGitSuffix(parsedSource.url);
     if (resourceType === 'rule') {
       const basePath = getRuleBasePath(resourcePath);
       sourceUrl = buildGithubTreeUrl(sourceUrl, ref, basePath);
@@ -464,11 +524,246 @@ export function buildUpdateInstallInvocation(update: TrackedUpdateEntry): {
   return { sourceUrl, args };
 }
 
+function parseUpdateScopeArg(args: string[]): UpdateScope | null {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--scope') {
+      const value = args[i + 1];
+      if (value === 'project' || value === 'global' || value === 'all') {
+        return value;
+      }
+      console.error(`Invalid value for --scope: ${value ?? '(missing)'}`);
+      console.error('Expected one of: project, global, all');
+      process.exit(1);
+    }
+  }
+
+  return null;
+}
+
+async function promptForUpdateScope(): Promise<UpdateScope> {
+  const scope = await p.select({
+    message: 'Update scope',
+    options: [
+      { value: 'all', label: 'All', hint: 'project + global' },
+      { value: 'project', label: 'Project', hint: 'current directory only' },
+      { value: 'global', label: 'Global', hint: 'globally installed only' },
+    ],
+  });
+
+  if (p.isCancel(scope)) {
+    p.cancel('Cancelled');
+    process.exit(0);
+  }
+
+  return scope as UpdateScope;
+}
+
+async function resolveUpdateScope(args: string[]): Promise<UpdateScope> {
+  const explicitScope = parseUpdateScopeArg(args);
+  if (explicitScope) {
+    return explicitScope;
+  }
+  if (!process.stdin.isTTY) {
+    return 'all';
+  }
+  return promptForUpdateScope();
+}
+
+async function computeTrackedResourceHashFromClone(
+  repoDir: string,
+  entry: GlobalSkillLockEntry | LocalSkillLockEntry
+): Promise<string | null> {
+  const resourcePath = getEntryResourcePath(entry).replace(/^\/+/, '');
+  if (!resourcePath) {
+    return null;
+  }
+
+  try {
+    if (getEntryResourceType(entry) === 'rule') {
+      const content = await readFile(join(repoDir, resourcePath), 'utf-8');
+      return computeContentHash(content);
+    }
+
+    const skillBasePath = getSkillBasePath(resourcePath);
+    const skillDir = skillBasePath ? join(repoDir, skillBasePath) : repoDir;
+    return await computeSkillFolderHash(skillDir);
+  } catch {
+    return null;
+  }
+}
+
+async function computeInstalledResourceHash(update: TrackedUpdateEntry): Promise<string | null> {
+  const resourceType = getEntryResourceType(update.entry);
+  const isGlobal = update.scope === 'global';
+  const candidatePaths: string[] = [];
+
+  try {
+    candidatePaths.push(getCanonicalPath(update.name, { global: isGlobal, resourceType }));
+  } catch {
+    // Ignore invalid path construction and try agent-specific locations instead.
+  }
+
+  for (const targetType of getEntryTargetTypes(update.entry)) {
+    try {
+      const installPath = getInstallPath(update.name, targetType as AgentType, {
+        global: isGlobal,
+        resourceType,
+      });
+      if (!candidatePaths.includes(installPath)) {
+        candidatePaths.push(installPath);
+      }
+    } catch {
+      // Ignore unsupported agent/resource combinations.
+    }
+  }
+
+  for (const candidatePath of candidatePaths) {
+    if (!existsSync(candidatePath)) {
+      continue;
+    }
+
+    try {
+      if (resourceType === 'rule') {
+        const content = await readFile(candidatePath, 'utf-8');
+        return computeContentHash(content);
+      }
+      return await computeSkillFolderHash(candidatePath);
+    } catch {
+      // Try the next candidate path.
+    }
+  }
+
+  return null;
+}
+
+function shouldUseLegacyGithubHash(update: TrackedUpdateEntry): boolean {
+  const storedHash = getEntryStoredHash(update.entry);
+  return (
+    update.scope === 'global' &&
+    update.entry.sourceType === 'github' &&
+    getEntryResourceType(update.entry) === 'skill' &&
+    SHA1_HEX_RE.test(storedHash) &&
+    !isSha256Hash(storedHash)
+  );
+}
+
+export async function detectTrackedUpdates(trackedEntries: TrackedUpdateEntry[]): Promise<{
+  updates: TrackedUpdateEntry[];
+  skipped: SkippedSkill[];
+  errors: Array<{ name: string; source: string; error: string }>;
+}> {
+  const token = getGitHubToken();
+  const updates: TrackedUpdateEntry[] = [];
+  const skipped: SkippedSkill[] = [];
+  const errors: Array<{ name: string; source: string; error: string }> = [];
+
+  const cloneCache = new Map<string, Promise<string>>();
+  const tempDirs = new Set<string>();
+
+  const getCachedCloneDir = (sourceUrl: string, ref: string): Promise<string> => {
+    const key = `${sourceUrl}#${ref || 'HEAD'}`;
+    if (!cloneCache.has(key)) {
+      cloneCache.set(
+        key,
+        cloneRepo(sourceUrl, ref || undefined).then((dir) => {
+          tempDirs.add(dir);
+          return dir;
+        })
+      );
+    }
+    return cloneCache.get(key)!;
+  };
+
+  try {
+    for (const tracked of trackedEntries) {
+      const { name, entry } = tracked;
+      const resourcePath = getEntryResourcePath(entry);
+      const sourceUrl = entry.sourceUrl || entry.source;
+      const source = getDisplaySource(entry);
+      let storedHash = getEntryStoredHash(entry);
+
+      if (!storedHash) {
+        storedHash = await computeInstalledResourceHash(tracked);
+      }
+
+      if (!isGitBackedSourceType(entry.sourceType) || !storedHash || !resourcePath) {
+        skipped.push({
+          name,
+          reason: getSkipReason(entry),
+          sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
+          command: `npx skillsandruless ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
+        });
+        continue;
+      }
+
+      if (isPinnedRef(getEntrySourceRef(entry))) {
+        skipped.push({
+          name,
+          reason: getSkipReason(entry),
+          sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
+          command: `npx skillsandruless ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
+        });
+        continue;
+      }
+
+      try {
+        let latestHash: string | null = null;
+
+        if (shouldUseLegacyGithubHash(tracked)) {
+          const ownerRepo =
+            getOwnerRepo(parseSource(sourceUrl || entry.source)) || entry.source || sourceUrl;
+          latestHash =
+            getEntryResourceType(entry) === 'rule'
+              ? await fetchRuleFileHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry))
+              : await fetchSkillFolderHash(
+                  ownerRepo,
+                  resourcePath,
+                  token,
+                  getEntrySourceRef(entry)
+                );
+        } else {
+          const repoDir = await getCachedCloneDir(sourceUrl, getEntrySourceRef(entry));
+          latestHash = await computeTrackedResourceHashFromClone(repoDir, entry);
+        }
+
+        if (!latestHash) {
+          errors.push({ name, source, error: 'Could not inspect tracked resource' });
+          continue;
+        }
+
+        if (latestHash !== storedHash) {
+          updates.push(tracked);
+        }
+      } catch (err) {
+        errors.push({
+          name,
+          source,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  } finally {
+    await Promise.all(
+      [...tempDirs].map(async (dir) => {
+        try {
+          await cleanupTempDir(dir);
+        } catch {
+          // Ignore cleanup failures after inspection
+        }
+      })
+    );
+  }
+
+  return { updates, skipped, errors };
+}
+
 async function runCheck(args: string[] = []): Promise<void> {
   console.log(`${TEXT}Checking for tracked resource updates...${RESET}`);
   console.log();
 
-  const trackedEntries = await collectTrackedUpdateEntries(process.cwd());
+  const scope = await resolveUpdateScope(args);
+  const trackedEntries = await collectTrackedUpdateEntries(process.cwd(), scope);
 
   if (trackedEntries.length === 0) {
     console.log(`${DIM}No tracked resources in lock files.${RESET}`);
@@ -478,53 +773,7 @@ async function runCheck(args: string[] = []): Promise<void> {
     return;
   }
 
-  // Get GitHub token from user's environment for higher rate limits
-  const token = getGitHubToken();
-
-  const skipped: SkippedSkill[] = [];
-
-  const updates: Array<{ name: string; source: string; scope: string }> = [];
-  const errors: Array<{ name: string; source: string; error: string }> = [];
-
-  for (const tracked of trackedEntries) {
-    const { name, entry } = tracked;
-    const resourcePath = getEntryResourcePath(entry);
-    const remoteHash = getEntryRemoteHash(entry);
-    const resourceType = getEntryResourceType(entry);
-    const ownerRepo = getOwnerRepo(parseSource(entry.sourceUrl || entry.source)) || entry.source;
-
-    if (entry.sourceType !== 'github' || !remoteHash || !resourcePath) {
-      skipped.push({
-        name,
-        reason: getSkipReason(entry),
-        sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
-        command: `npx skillsandruless ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
-      });
-      continue;
-    }
-
-    try {
-      const latestHash =
-        resourceType === 'rule'
-          ? await fetchRuleFileHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry))
-          : await fetchSkillFolderHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry));
-
-      if (!latestHash) {
-        errors.push({ name, source: ownerRepo, error: 'Could not fetch from GitHub' });
-        continue;
-      }
-
-      if (latestHash !== remoteHash) {
-        updates.push({ name, source: ownerRepo, scope: tracked.scope });
-      }
-    } catch (err) {
-      errors.push({
-        name,
-        source: ownerRepo,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
-    }
-  }
+  const { updates, skipped, errors } = await detectTrackedUpdates(trackedEntries);
 
   console.log();
 
@@ -535,7 +784,7 @@ async function runCheck(args: string[] = []): Promise<void> {
     console.log();
     for (const update of updates) {
       console.log(`  ${TEXT}↑${RESET} ${update.name}`);
-      console.log(`    ${DIM}source: ${update.source}${RESET}`);
+      console.log(`    ${DIM}source: ${getDisplaySource(update.entry)}${RESET}`);
     }
     console.log();
     console.log(
@@ -565,11 +814,12 @@ async function runCheck(args: string[] = []): Promise<void> {
   console.log();
 }
 
-async function runUpdate(): Promise<void> {
+async function runUpdate(args: string[] = []): Promise<void> {
   console.log(`${TEXT}Checking for tracked resource updates...${RESET}`);
   console.log();
 
-  const trackedEntries = await collectTrackedUpdateEntries(process.cwd());
+  const scope = await resolveUpdateScope(args);
+  const trackedEntries = await collectTrackedUpdateEntries(process.cwd(), scope);
 
   if (trackedEntries.length === 0) {
     console.log(`${DIM}No tracked resources in lock files.${RESET}`);
@@ -579,42 +829,7 @@ async function runUpdate(): Promise<void> {
     return;
   }
 
-  // Get GitHub token from user's environment for higher rate limits
-  const token = getGitHubToken();
-
-  const updates: Array<TrackedUpdateEntry> = [];
-  const skipped: SkippedSkill[] = [];
-
-  for (const tracked of trackedEntries) {
-    const { name, entry } = tracked;
-    const resourcePath = getEntryResourcePath(entry);
-    const remoteHash = getEntryRemoteHash(entry);
-    const resourceType = getEntryResourceType(entry);
-    const ownerRepo = getOwnerRepo(parseSource(entry.sourceUrl || entry.source)) || entry.source;
-
-    if (entry.sourceType !== 'github' || !remoteHash || !resourcePath) {
-      skipped.push({
-        name,
-        reason: getSkipReason(entry),
-        sourceUrl: buildUpdateInstallInvocation(tracked).sourceUrl,
-        command: `npx skillsandruless ${buildUpdateInstallInvocation(tracked).args.join(' ')}`,
-      });
-      continue;
-    }
-
-    try {
-      const latestHash =
-        resourceType === 'rule'
-          ? await fetchRuleFileHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry))
-          : await fetchSkillFolderHash(ownerRepo, resourcePath, token, getEntrySourceRef(entry));
-
-      if (latestHash && latestHash !== remoteHash) {
-        updates.push(tracked);
-      }
-    } catch {
-      // Skip resources that fail to check
-    }
-  }
+  const { updates, skipped, errors } = await detectTrackedUpdates(trackedEntries);
 
   const checkedCount = trackedEntries.length - skipped.length;
 
@@ -626,6 +841,10 @@ async function runUpdate(): Promise<void> {
 
   if (updates.length === 0) {
     console.log(`${TEXT}✓ All tracked resources are up to date${RESET}`);
+    if (errors.length > 0) {
+      console.log();
+      console.log(`${DIM}Could not check ${errors.length} resource(s)${RESET}`);
+    }
     console.log();
     return;
   }
@@ -749,11 +968,11 @@ async function main(): Promise<void> {
       await runList(restArgs);
       break;
     case 'check':
-      runCheck(restArgs);
+      await runCheck(restArgs);
       break;
     case 'update':
     case 'upgrade':
-      runUpdate();
+      await runUpdate(restArgs);
       break;
     case '--help':
     case '-h':

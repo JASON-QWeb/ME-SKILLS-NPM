@@ -18,6 +18,10 @@ interface ListOptions {
   resourceType?: ResourceType;
 }
 
+interface ListedResource extends InstalledSkill {
+  resourceType: ResourceType;
+}
+
 /**
  * Shortens a path for display: replaces homedir with ~ and cwd with .
  */
@@ -69,9 +73,13 @@ export function parseListOptions(args: string[]): ListOptions {
   return options;
 }
 
+function getRequestedResourceTypes(options: ListOptions): ResourceType[] {
+  return options.resourceType ? [options.resourceType] : ['skill', 'rule'];
+}
+
 export async function runList(args: string[]): Promise<void> {
   const options = parseListOptions(args);
-  const resourceType = options.resourceType ?? 'skill';
+  const resourceTypes = getRequestedResourceTypes(options);
 
   // Default to project only (local), use -g for global
   const scope = options.global === true ? true : false;
@@ -91,19 +99,28 @@ export async function runList(args: string[]): Promise<void> {
     agentFilter = options.agent as AgentType[];
   }
 
-  const installedSkills = await listInstalledSkills({
-    global: scope,
-    agentFilter,
-    resourceType,
-  });
+  const installedResources: ListedResource[] = (
+    await Promise.all(
+      resourceTypes.map(async (resourceType) =>
+        (
+          await listInstalledSkills({
+            global: scope,
+            agentFilter,
+            resourceType,
+          })
+        ).map((resource) => ({ ...resource, resourceType }))
+      )
+    )
+  ).flat();
 
   // JSON output mode: structured, no ANSI, untruncated agent lists
   if (options.json) {
-    const jsonOutput = installedSkills.map((skill) => ({
-      name: skill.name,
-      path: skill.canonicalPath,
-      scope: skill.scope,
-      agents: skill.agents.map((a) => agents[a].displayName),
+    const jsonOutput = installedResources.map((resource) => ({
+      name: resource.name,
+      resourceType: resource.resourceType,
+      path: resource.canonicalPath,
+      scope: resource.scope,
+      agents: resource.agents.map((a) => agents[a].displayName),
     }));
     console.log(JSON.stringify(jsonOutput, null, 2));
     return;
@@ -115,12 +132,12 @@ export async function runList(args: string[]): Promise<void> {
   const cwd = process.cwd();
   const scopeLabel = scope ? 'Global' : 'Project';
 
-  if (installedSkills.length === 0) {
+  if (installedResources.length === 0) {
     if (options.json) {
       console.log('[]');
       return;
     }
-    const resourceLabel = resourceType === 'skill' ? 'skills' : 'rules';
+    const resourceLabel = resourceTypes.length === 1 ? `${resourceTypes[0]}s` : 'skills or rules';
     console.log(`${DIM}No ${scopeLabel.toLowerCase()} ${resourceLabel} found.${RESET}`);
     if (scope) {
       console.log(`${DIM}Try listing project ${resourceLabel} without -g${RESET}`);
@@ -130,71 +147,75 @@ export async function runList(args: string[]): Promise<void> {
     return;
   }
 
-  function printSkill(skill: InstalledSkill, indent: boolean = false): void {
+  function printResource(resource: InstalledSkill, indent: boolean = false): void {
     const prefix = indent ? '  ' : '';
-    const shortPath = shortenPath(skill.canonicalPath, cwd);
-    const agentNames = skill.agents.map((a) => agents[a].displayName);
+    const shortPath = shortenPath(resource.canonicalPath, cwd);
+    const agentNames = resource.agents.map((a) => agents[a].displayName);
     const agentInfo =
-      skill.agents.length > 0 ? formatList(agentNames) : `${YELLOW}not linked${RESET}`;
-    console.log(`${prefix}${CYAN}${skill.name}${RESET} ${DIM}${shortPath}${RESET}`);
+      resource.agents.length > 0 ? formatList(agentNames) : `${YELLOW}not linked${RESET}`;
+    console.log(`${prefix}${CYAN}${resource.name}${RESET} ${DIM}${shortPath}${RESET}`);
     console.log(`${prefix}  ${DIM}Agents:${RESET} ${agentInfo}`);
   }
 
-  console.log(`${BOLD}${scopeLabel} ${resourceType === 'skill' ? 'Skills' : 'Rules'}${RESET}`);
-  console.log();
-
-  // Group skills by plugin
-  const groupedSkills: Record<string, InstalledSkill[]> = {};
-  const ungroupedSkills: InstalledSkill[] = [];
-
-  for (const skill of installedSkills) {
-    const lockEntry = lockedSkills[buildLockResourceKey(skill.name, resourceType)];
-    if (lockEntry?.pluginName) {
-      const group = lockEntry.pluginName;
-      if (!groupedSkills[group]) {
-        groupedSkills[group] = [];
-      }
-      groupedSkills[group].push(skill);
-    } else {
-      ungroupedSkills.push(skill);
-    }
-  }
-
-  const hasGroups = Object.keys(groupedSkills).length > 0;
-
-  if (hasGroups) {
-    // Print groups sorted alphabetically
-    const sortedGroups = Object.keys(groupedSkills).sort();
-    for (const group of sortedGroups) {
-      // Convert kebab-case to Title Case for display header
-      const title = group
-        .split('-')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-
-      console.log(`${BOLD}${title}${RESET}`);
-      const skills = groupedSkills[group];
-      if (skills) {
-        for (const skill of skills) {
-          printSkill(skill, true);
-        }
-      }
-      console.log();
+  for (const resourceType of resourceTypes) {
+    const resourcesForType = installedResources.filter(
+      (resource) => resource.resourceType === resourceType
+    );
+    if (resourcesForType.length === 0) {
+      continue;
     }
 
-    // Print ungrouped skills if any exist
-    if (ungroupedSkills.length > 0) {
-      console.log(`${BOLD}General${RESET}`);
-      for (const skill of ungroupedSkills) {
-        printSkill(skill, true);
-      }
-      console.log();
-    }
-  } else {
-    // No groups, print flat list as before
-    for (const skill of installedSkills) {
-      printSkill(skill);
-    }
+    console.log(`${BOLD}${scopeLabel} ${resourceType === 'skill' ? 'Skills' : 'Rules'}${RESET}`);
     console.log();
+
+    const groupedResources: Record<string, InstalledSkill[]> = {};
+    const ungroupedResources: InstalledSkill[] = [];
+
+    for (const resource of resourcesForType) {
+      const lockEntry = lockedSkills[buildLockResourceKey(resource.name, resourceType)];
+      if (lockEntry?.pluginName) {
+        const group = lockEntry.pluginName;
+        if (!groupedResources[group]) {
+          groupedResources[group] = [];
+        }
+        groupedResources[group].push(resource);
+      } else {
+        ungroupedResources.push(resource);
+      }
+    }
+
+    const hasGroups = Object.keys(groupedResources).length > 0;
+
+    if (hasGroups) {
+      const sortedGroups = Object.keys(groupedResources).sort();
+      for (const group of sortedGroups) {
+        const title = group
+          .split('-')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+
+        console.log(`${BOLD}${title}${RESET}`);
+        const groupedItems = groupedResources[group];
+        if (groupedItems) {
+          for (const resource of groupedItems) {
+            printResource(resource, true);
+          }
+        }
+        console.log();
+      }
+
+      if (ungroupedResources.length > 0) {
+        console.log(`${BOLD}General${RESET}`);
+        for (const resource of ungroupedResources) {
+          printResource(resource, true);
+        }
+        console.log();
+      }
+    } else {
+      for (const resource of resourcesForType) {
+        printResource(resource);
+      }
+      console.log();
+    }
   }
 }

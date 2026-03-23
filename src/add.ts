@@ -50,8 +50,6 @@ import { wellKnownProvider, type WellKnownSkill } from './providers/index.ts';
 import {
   addSkillToLock,
   computeContentHash,
-  fetchSkillFolderHash,
-  getGitHubToken,
   isPromptDismissed,
   dismissPrompt,
   getLastSelectedAgents,
@@ -1549,19 +1547,8 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
         const skillDisplayName = getSkillDisplayName(skill);
         if (successfulSkillNames.has(skillDisplayName)) {
           try {
-            // Fetch the folder hash from GitHub Trees API
-            let skillFolderHash = '';
             const skillPathValue = skillFiles[skill.name];
-            if (parsed.type === 'github' && skillPathValue) {
-              const token = getGitHubToken();
-              const hash = await fetchSkillFolderHash(
-                normalizedSource,
-                skillPathValue,
-                token,
-                parsed.ref
-              );
-              if (hash) skillFolderHash = hash;
-            }
+            const skillFolderHash = await computeSkillFolderHash(skill.path);
 
             await addSkillToLock(skill.name, {
               source: lockSource || normalizedSource,

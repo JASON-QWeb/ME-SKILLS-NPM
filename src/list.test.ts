@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, rmSync, mkdirSync, writeFileSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir, homedir } from 'os';
 import { runCli } from './test-utils.ts';
@@ -9,8 +9,7 @@ describe('list command', () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `skills-list-test-${Date.now()}`);
-    mkdirSync(testDir, { recursive: true });
+    testDir = mkdtempSync(join(tmpdir(), 'skills-list-test-'));
   });
 
   afterEach(() => {
@@ -77,14 +76,13 @@ describe('list command', () => {
   describe('CLI integration', () => {
     it('should run list command', () => {
       const result = runCli(['list'], testDir);
-      // Empty project dir shows "No project skills found"
-      expect(result.stdout).toContain('No project skills found');
+      expect(result.stdout).toContain('No project skills or rules found');
       expect(result.exitCode).toBe(0);
     });
 
     it('should run ls alias', () => {
       const result = runCli(['ls'], testDir);
-      expect(result.stdout).toContain('No project skills found');
+      expect(result.stdout).toContain('No project skills or rules found');
       expect(result.exitCode).toBe(0);
     });
 
@@ -148,8 +146,34 @@ description: A skill for JSON testing
 
     it('should show message when no project skills found', () => {
       const result = runCli(['list'], testDir);
-      expect(result.stdout).toContain('No project skills found');
-      expect(result.stdout).toContain('Try listing global skills with -g');
+      expect(result.stdout).toContain('No project skills or rules found');
+      expect(result.stdout).toContain('Try listing global skills or rules with -g');
+      expect(result.exitCode).toBe(0);
+    });
+
+    it('should list project skills and rules by default', () => {
+      const skillDir = join(testDir, '.agents', 'skills', 'test-skill');
+      const ruleDir = join(testDir, '.agents', 'rules');
+      mkdirSync(skillDir, { recursive: true });
+      mkdirSync(ruleDir, { recursive: true });
+
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        `---
+name: test-skill
+description: A test skill for listing
+---
+
+# Test Skill
+`
+      );
+      writeFileSync(join(ruleDir, 'test-rule.md'), '# Test Rule\n');
+
+      const result = runCli(['list'], testDir);
+      expect(result.stdout).toContain('Project Skills');
+      expect(result.stdout).toContain('test-skill');
+      expect(result.stdout).toContain('Project Rules');
+      expect(result.stdout).toContain('test-rule');
       expect(result.exitCode).toBe(0);
     });
 

@@ -1,15 +1,59 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildUpdateInstallInvocation, collectTrackedUpdateEntries } from '../src/cli.ts';
+import {
+  buildUpdateInstallInvocation,
+  collectTrackedUpdateEntries,
+  detectTrackedUpdates,
+} from '../src/cli.ts';
 import {
   computeContentHash,
   fetchRuleFileHash,
   fetchSkillFolderHash,
   writeSkillLock,
 } from '../src/skill-lock.ts';
-import { writeLocalLock } from '../src/local-lock.ts';
+import { getCanonicalPath } from '../src/installer.ts';
+import { computeSkillFolderHash, writeLocalLock } from '../src/local-lock.ts';
+
+function git(cmd: string, cwd: string): void {
+  execSync(`git ${cmd}`, { cwd, stdio: 'pipe' });
+}
+
+async function createBareRemoteRepo(): Promise<{
+  bareDir: string;
+  workDir: string;
+  sourceUrl: string;
+  skillPath: string;
+}> {
+  const bareDir = await mkdtemp(join(tmpdir(), 'skillshub-update-remote-'));
+  const workDir = await mkdtemp(join(tmpdir(), 'skillshub-update-work-'));
+
+  git('init --bare', bareDir);
+  git('init -b main', workDir);
+  git('config user.name "Test User"', workDir);
+  git('config user.email "test@example.com"', workDir);
+  git(`remote add origin file://${bareDir}`, workDir);
+
+  const skillDir = join(workDir, 'skills', 'demo-skill');
+  await mkdir(skillDir, { recursive: true });
+  await writeFile(
+    join(skillDir, 'SKILL.md'),
+    ['---', 'name: demo-skill', 'description: Demo skill', '---', '', 'Initial body'].join('\n')
+  );
+
+  git('add .', workDir);
+  git('commit -m "initial skill"', workDir);
+  git('push -u origin main', workDir);
+
+  return {
+    bareDir,
+    workDir,
+    sourceUrl: `file://${bareDir}`,
+    skillPath: join(workDir, 'skills', 'demo-skill'),
+  };
+}
 
 describe('update tracking', () => {
   let originalXdgStateHome: string | undefined;
@@ -88,6 +132,8 @@ describe('update tracking', () => {
       );
 
       const tracked = await collectTrackedUpdateEntries(cwd);
+      const projectOnly = await collectTrackedUpdateEntries(cwd, 'project');
+      const globalOnly = await collectTrackedUpdateEntries(cwd, 'global');
 
       expect(
         tracked.map(({ name, scope, entry }) => ({
@@ -110,9 +156,142 @@ describe('update tracking', () => {
           targetTypes: ['cline-me', 'codex'],
         },
       ]);
+
+      expect(projectOnly).toHaveLength(1);
+      expect(projectOnly[0]!.name).toBe('project-rule');
+      expect(projectOnly[0]!.scope).toBe('project');
+
+      expect(globalOnly).toHaveLength(1);
+      expect(globalOnly[0]!.name).toBe('global-skill');
+      expect(globalOnly[0]!.scope).toBe('global');
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('detects generic git updates by hashing the tracked resource from a shallow clone', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'skillshub-update-project-'));
+    const { bareDir, workDir, sourceUrl, skillPath } = await createBareRemoteRepo();
+
+    try {
+      const initialHash = await computeSkillFolderHash(skillPath);
+
+      await writeLocalLock(
+        {
+          version: 2,
+          skills: {
+            'demo-skill': {
+              source: sourceUrl,
+              sourceType: 'git',
+              sourceUrl,
+              resourceType: 'skill',
+              targetType: 'codex',
+              targetTypes: ['codex'],
+              sourceRef: 'main',
+              resourcePath: 'skills/demo-skill/SKILL.md',
+              remoteHash: initialHash,
+              computedHash: initialHash,
+            },
+          },
+        },
+        cwd
+      );
+
+      await writeFile(join(workDir, 'README.md'), 'Unrelated change\n');
+      git('add README.md', workDir);
+      git('commit -m "docs: unrelated change"', workDir);
+      git('push origin main', workDir);
+
+      let tracked = await collectTrackedUpdateEntries(cwd, 'project');
+      let result = await detectTrackedUpdates(tracked);
+      expect(result.updates).toHaveLength(0);
+      expect(result.skipped).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+
+      await writeFile(
+        join(workDir, 'skills', 'demo-skill', 'SKILL.md'),
+        ['---', 'name: demo-skill', 'description: Demo skill', '---', '', 'Updated body'].join('\n')
+      );
+      git('add skills/demo-skill/SKILL.md', workDir);
+      git('commit -m "feat: update tracked skill"', workDir);
+      git('push origin main', workDir);
+
+      tracked = await collectTrackedUpdateEntries(cwd, 'project');
+      result = await detectTrackedUpdates(tracked);
+      expect(result.updates).toHaveLength(1);
+      expect(result.updates[0]!.name).toBe('demo-skill');
+      expect(result.updates[0]!.scope).toBe('project');
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(workDir, { recursive: true, force: true });
+      await rm(bareDir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the installed global resource hash for legacy generic git entries with no lock hash', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'skillshub-update-state-'));
+    const { bareDir, workDir, sourceUrl } = await createBareRemoteRepo();
+
+    try {
+      vi.stubEnv('XDG_STATE_HOME', stateDir);
+      vi.stubEnv('HOME', join(stateDir, 'home'));
+
+      const canonicalSkillDir = getCanonicalPath('demo-skill', { global: true });
+      await mkdir(canonicalSkillDir, { recursive: true });
+      await writeFile(
+        join(canonicalSkillDir, 'SKILL.md'),
+        ['---', 'name: demo-skill', 'description: Demo skill', '---', '', 'Initial body'].join('\n')
+      );
+
+      await writeSkillLock({
+        version: 4,
+        skills: {
+          'demo-skill': {
+            source: sourceUrl,
+            sourceType: 'git',
+            sourceUrl,
+            resourceType: 'skill',
+            targetType: 'codex',
+            targetTypes: ['codex'],
+            sourceRef: 'main',
+            resourcePath: 'skills/demo-skill/SKILL.md',
+            remoteHash: '',
+            skillFolderHash: '',
+            installedAt: '2026-03-21T00:00:00.000Z',
+            updatedAt: '2026-03-21T00:00:00.000Z',
+          },
+        },
+      });
+
+      await writeFile(join(workDir, 'README.md'), 'Unrelated change\n');
+      git('add README.md', workDir);
+      git('commit -m "docs: unrelated change"', workDir);
+      git('push origin main', workDir);
+
+      let tracked = await collectTrackedUpdateEntries(process.cwd(), 'global');
+      let result = await detectTrackedUpdates(tracked);
+      expect(result.updates).toHaveLength(0);
+      expect(result.skipped).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+
+      await writeFile(
+        join(workDir, 'skills', 'demo-skill', 'SKILL.md'),
+        ['---', 'name: demo-skill', 'description: Demo skill', '---', '', 'Updated body'].join('\n')
+      );
+      git('add skills/demo-skill/SKILL.md', workDir);
+      git('commit -m "feat: update tracked skill"', workDir);
+      git('push origin main', workDir);
+
+      tracked = await collectTrackedUpdateEntries(process.cwd(), 'global');
+      result = await detectTrackedUpdates(tracked);
+      expect(result.updates).toHaveLength(1);
+      expect(result.updates[0]!.name).toBe('demo-skill');
+      expect(result.updates[0]!.scope).toBe('global');
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+      await rm(workDir, { recursive: true, force: true });
+      await rm(bareDir, { recursive: true, force: true });
     }
   });
 
