@@ -453,7 +453,7 @@ export const agents: Record<AgentType, AgentConfig> = Object.fromEntries(
         withSkillResourceDefaults(config, {
           rule: {
             projectDir: '.clinerules',
-            globalDir: join(home, '.clinerules'),
+            globalDir: join(home, 'Cline', 'Rules'),
           },
         }),
       ];

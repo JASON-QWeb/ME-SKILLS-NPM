@@ -936,8 +936,29 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     options.yes = true;
   }
 
+  // If neither --rule nor --skill is specified, prompt the user to choose resource type
+  if (!options.rule && !options.skill && !options.yes && process.stdin.isTTY) {
+    console.log();
+    const resourceType = await p.select({
+      message: 'What do you want to install?',
+      options: [
+        { value: 'skill', label: 'Skills', hint: 'Agent skills (SKILL.md)' },
+        { value: 'rule', label: 'Rules', hint: 'Agent rules (.md files in rules/)' },
+      ],
+    });
+
+    if (p.isCancel(resourceType)) {
+      p.cancel('Installation cancelled');
+      process.exit(0);
+    }
+
+    if (resourceType === 'rule') {
+      options.rule = true;
+    }
+  }
+
   console.log();
-  p.intro(pc.bgCyan(pc.black(' skills ')));
+  p.intro(pc.bgCyan(pc.black(options.rule ? ' rules ' : ' skills ')));
 
   if (!process.stdin.isTTY) {
     showInstallTip();
