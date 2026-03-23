@@ -53,9 +53,9 @@ export function parseListOptions(args: string[]): ListOptions {
       options.global = true;
     } else if (arg === '--json') {
       options.json = true;
-    } else if (arg === '--rule') {
+    } else if (arg === '--rule' || arg === '--rules') {
       options.resourceType = 'rule';
-    } else if (arg === '-s' || arg === '--skill') {
+    } else if (arg === '-s' || arg === '--skill' || arg === '--skills') {
       options.resourceType = 'skill';
     } else if (arg === '-a' || arg === '--agent') {
       options.agent = options.agent || [];

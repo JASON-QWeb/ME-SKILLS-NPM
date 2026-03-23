@@ -460,9 +460,9 @@ export function parseRemoveOptions(args: string[]): { skills: string[]; options:
       options.global = true;
     } else if (arg === '-y' || arg === '--yes') {
       options.yes = true;
-    } else if (arg === '--rule') {
+    } else if (arg === '--rule' || arg === '--rules') {
       options.resourceType = 'rule';
-    } else if (arg === '-s' || arg === '--skill') {
+    } else if (arg === '-s' || arg === '--skill' || arg === '--skills') {
       i++;
       let nextArg = args[i];
       while (i < args.length && nextArg && !nextArg.startsWith('-')) {

@@ -2133,7 +2133,7 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.list = true;
     } else if (arg === '--all') {
       options.all = true;
-    } else if (arg === '--rule') {
+    } else if (arg === '--rule' || arg === '--rules') {
       options.rule = true;
     } else if (arg === '-a' || arg === '--agent') {
       options.agent = options.agent || [];
@@ -2145,7 +2145,7 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
         nextArg = args[i];
       }
       i--; // Back up one since the loop will increment
-    } else if (arg === '-s' || arg === '--skill') {
+    } else if (arg === '-s' || arg === '--skill' || arg === '--skills') {
       options.skill = options.skill || [];
       i++;
       let nextArg = args[i];
