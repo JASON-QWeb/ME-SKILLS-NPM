@@ -47,6 +47,10 @@ export interface SkillLockEntry {
   updatedAt: string;
   /** Name of the plugin this skill belongs to (if any) */
   pluginName?: string;
+  /** Repo-relative paths that were hydrated through Git LFS during install. */
+  lfsPaths?: string[];
+  /** Git LFS object ids for hydrated files, formatted as sha256:<oid>. */
+  lfsOids?: string[];
 }
 
 /**
@@ -101,6 +105,12 @@ function normalizeSkillLockEntry(entry: Partial<SkillLockEntry>): SkillLockEntry
     : targetType
       ? [targetType]
       : undefined;
+  const lfsPaths = Array.isArray(entry.lfsPaths)
+    ? [...new Set(entry.lfsPaths.filter(Boolean))]
+    : undefined;
+  const lfsOids = Array.isArray(entry.lfsOids)
+    ? [...new Set(entry.lfsOids.filter(Boolean))]
+    : undefined;
 
   return {
     source: entry.source ?? '',
@@ -117,6 +127,8 @@ function normalizeSkillLockEntry(entry: Partial<SkillLockEntry>): SkillLockEntry
     installedAt: entry.installedAt ?? '',
     updatedAt: entry.updatedAt ?? '',
     pluginName: entry.pluginName,
+    lfsPaths,
+    lfsOids,
   };
 }
 

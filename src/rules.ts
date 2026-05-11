@@ -19,6 +19,21 @@ function ruleDescriptionFromContent(content: string, fallback: string): string {
   return fallback;
 }
 
+export async function parseRuleFile(rulePath: string): Promise<Rule> {
+  const content = await readFile(rulePath, 'utf-8');
+  const name = basename(rulePath, '.md');
+  return {
+    name,
+    description: ruleDescriptionFromContent(content, name),
+    path: rulePath,
+    content,
+  };
+}
+
+export async function reloadRules(rules: Rule[]): Promise<Rule[]> {
+  return Promise.all(rules.map((rule) => parseRuleFile(rule.path)));
+}
+
 export async function discoverRules(basePath: string, subpath?: string): Promise<Rule[]> {
   const searchPath = subpath ? join(basePath, subpath) : basePath;
   const rulesDir = basename(searchPath) === 'rules' ? searchPath : join(searchPath, 'rules');
@@ -48,14 +63,7 @@ export async function discoverRules(basePath: string, subpath?: string): Promise
     const rulePath = join(rulesDir, entry.name);
     if (!isRulePathSafe(rulesDir, rulePath)) continue;
 
-    const content = await readFile(rulePath, 'utf-8');
-    const name = basename(entry.name, '.md');
-    rules.push({
-      name,
-      description: ruleDescriptionFromContent(content, name),
-      path: rulePath,
-      content,
-    });
+    rules.push(await parseRuleFile(rulePath));
   }
 
   rules.sort((a, b) => a.name.localeCompare(b.name));

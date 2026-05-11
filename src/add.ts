@@ -5,7 +5,8 @@ import { homedir } from 'os';
 import { sep, relative } from 'path';
 import { parseSource, getOwnerRepo, parseOwnerRepo, isRepoPrivate } from './source-parser.ts';
 import { searchMultiselect } from './prompts/search-multiselect.ts';
-import { discoverRules } from './rules.ts';
+import { discoverRules, reloadRules } from './rules.ts';
+import { hydrateSelectedLfsFiles, type LfsPointerInfo } from './lfs.ts';
 
 // Helper to check if a value is a cancel symbol (works with both clack and our custom prompts)
 const isCancelled = (value: unknown): value is symbol => typeof value === 'symbol';
@@ -173,6 +174,45 @@ function formatList(items: string[], maxShow: number = 5): string {
   const shown = items.slice(0, maxShow);
   const remaining = items.length - maxShow;
   return `${shown.join(', ')} +${remaining} more`;
+}
+
+function getRepoRelativePath(repoDir: string, targetPath: string): string {
+  if (targetPath === repoDir) {
+    return '';
+  }
+  if (!targetPath.startsWith(repoDir + sep)) {
+    return '';
+  }
+  return targetPath
+    .slice(repoDir.length + 1)
+    .split(sep)
+    .join('/');
+}
+
+function getLfsFilesForResource(
+  lfsFiles: LfsPointerInfo[],
+  resourceRoot: string
+): LfsPointerInfo[] {
+  const normalizedRoot = resourceRoot.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/$/, '');
+  if (!normalizedRoot) {
+    return lfsFiles;
+  }
+  return lfsFiles.filter(
+    (file) => file.path === normalizedRoot || file.path.startsWith(`${normalizedRoot}/`)
+  );
+}
+
+function buildLfsLockFields(lfsFiles: LfsPointerInfo[]): {
+  lfsPaths?: string[];
+  lfsOids?: string[];
+} {
+  if (lfsFiles.length === 0) {
+    return {};
+  }
+  return {
+    lfsPaths: [...new Set(lfsFiles.map((file) => file.path))],
+    lfsOids: [...new Set(lfsFiles.map((file) => `sha256:${file.oid}`))],
+  };
 }
 
 /**
@@ -1439,6 +1479,15 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       }
     }
 
+    let hydratedLfsFiles: LfsPointerInfo[] = [];
+    if (tempDir) {
+      const includePaths = selectedSkills.map((skill) => {
+        const rel = getRepoRelativePath(tempDir!, skill.path);
+        return rel ? `${rel}/**` : '**';
+      });
+      hydratedLfsFiles = await hydrateSelectedLfsFiles(tempDir, includePaths, spinner);
+    }
+
     spinner.start('Installing skills...');
 
     const results: {
@@ -1549,6 +1598,10 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
           try {
             const skillPathValue = skillFiles[skill.name];
             const skillFolderHash = await computeSkillFolderHash(skill.path);
+            const skillRepoRoot = tempDir ? getRepoRelativePath(tempDir, skill.path) : '';
+            const lfsLockFields = buildLfsLockFields(
+              getLfsFilesForResource(hydratedLfsFiles, skillRepoRoot)
+            );
 
             await addSkillToLock(skill.name, {
               source: lockSource || normalizedSource,
@@ -1563,6 +1616,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
               remoteHash: skillFolderHash,
               skillFolderHash,
               pluginName: skill.pluginName,
+              ...lfsLockFields,
             });
           } catch {
             // Don't fail installation if lock file update fails
@@ -1582,6 +1636,10 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
           try {
             const computedHash = await computeSkillFolderHash(skill.path);
             const localSkillPath = skillFiles[skill.name];
+            const skillRepoRoot = tempDir ? getRepoRelativePath(tempDir, skill.path) : '';
+            const lfsLockFields = buildLfsLockFields(
+              getLfsFilesForResource(hydratedLfsFiles, skillRepoRoot)
+            );
             await addSkillToLocalLock(
               skill.name,
               {
@@ -1595,6 +1653,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
                 resourcePath: localSkillPath || skill.path,
                 remoteHash: computedHash,
                 computedHash,
+                ...lfsLockFields,
               },
               cwd
             );
@@ -2011,6 +2070,15 @@ async function handleRuleInstallation(
     }
   }
 
+  let hydratedRuleLfsFiles: LfsPointerInfo[] = [];
+  if (tempDir) {
+    const includePaths = selectedRules.map((rule) => getRepoRelativePath(tempDir!, rule.path));
+    hydratedRuleLfsFiles = await hydrateSelectedLfsFiles(tempDir, includePaths, spinner);
+    if (hydratedRuleLfsFiles.length > 0) {
+      selectedRules = await reloadRules(selectedRules);
+    }
+  }
+
   spinner.start('Installing rules...');
   const results: Array<{
     rule: string;
@@ -2044,6 +2112,10 @@ async function handleRuleInstallation(
       try {
         const ruleResourcePath = relative(rulesDir, rule.path).split('\\').join('/');
         const ruleHash = computeContentHash(rule.content);
+        const repoRulePath = tempDir ? getRepoRelativePath(tempDir, rule.path) : ruleResourcePath;
+        const lfsLockFields = buildLfsLockFields(
+          hydratedRuleLfsFiles.filter((file) => file.path === repoRulePath)
+        );
 
         const lockEntry = {
           source: lockSource,
@@ -2057,6 +2129,7 @@ async function handleRuleInstallation(
           remoteHash: ruleHash,
           skillPath: ruleResourcePath,
           skillFolderHash: ruleHash,
+          ...lfsLockFields,
         };
 
         if (installGlobally) {

@@ -46,6 +46,10 @@ export interface LocalSkillLockEntry {
   skillFolderHash?: string;
   /** Optional plugin name for compatibility. */
   pluginName?: string;
+  /** Repo-relative paths that were hydrated through Git LFS during install. */
+  lfsPaths?: string[];
+  /** Git LFS object ids for hydrated files, formatted as sha256:<oid>. */
+  lfsOids?: string[];
 }
 
 /**
@@ -82,6 +86,12 @@ function normalizeLocalEntry(entry: Partial<LocalSkillLockEntry>): LocalSkillLoc
     : targetType
       ? [targetType]
       : undefined;
+  const lfsPaths = Array.isArray(entry.lfsPaths)
+    ? [...new Set(entry.lfsPaths.filter(Boolean))]
+    : undefined;
+  const lfsOids = Array.isArray(entry.lfsOids)
+    ? [...new Set(entry.lfsOids.filter(Boolean))]
+    : undefined;
 
   return {
     source: entry.source ?? '',
@@ -97,6 +107,8 @@ function normalizeLocalEntry(entry: Partial<LocalSkillLockEntry>): LocalSkillLoc
     skillPath: entry.skillPath,
     skillFolderHash: entry.skillFolderHash ?? remoteHash,
     pluginName: entry.pluginName,
+    lfsPaths,
+    lfsOids,
   };
 }
 

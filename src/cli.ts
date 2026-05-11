@@ -681,7 +681,7 @@ export async function detectTrackedUpdates(trackedEntries: TrackedUpdateEntry[])
       const resourcePath = getEntryResourcePath(entry);
       const sourceUrl = entry.sourceUrl || entry.source;
       const source = getDisplaySource(entry);
-      let storedHash = getEntryStoredHash(entry);
+      let storedHash: string | null = getEntryStoredHash(entry);
 
       if (!storedHash) {
         storedHash = await computeInstalledResourceHash(tracked);

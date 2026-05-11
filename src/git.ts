@@ -19,11 +19,23 @@ export class GitCloneError extends Error {
   }
 }
 
-export async function cloneRepo(url: string, ref?: string): Promise<string> {
+export interface CloneRepoOptions {
+  skipLfs?: boolean;
+}
+
+export async function cloneRepo(
+  url: string,
+  ref?: string,
+  options: CloneRepoOptions = {}
+): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), 'skills-'));
   const git = simpleGit({
     timeout: { block: CLONE_TIMEOUT_MS },
-  }).env({ ...process.env, GIT_TERMINAL_PROMPT: '0' });
+  }).env({
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    ...(options.skipLfs === false ? {} : { GIT_LFS_SKIP_SMUDGE: '1' }),
+  });
   const cloneOptions = ref ? ['--depth', '1', '--branch', ref] : ['--depth', '1'];
 
   try {
